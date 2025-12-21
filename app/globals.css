@@ -1,26 +1,145 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-win11-background: #0f0f10;
+  --color-win11-acrylic: #20232A;
+  --color-win11-primary: #2563eb;
+  --color-win11-accent: #3b82f6;
+  --color-win11-subtle: #9CA3AF;
+  
+  --shadow-acrylic: 0 8px 32px rgba(0,0,0,0.35);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-win11-background);
+  color: white;
 }
+
+/* Cosmic gradient háttér */
+.cosmic-gradient {
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
+    radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.6) 0, transparent 60%),
+    radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.5) 0, transparent 60%),
+    radial-gradient(circle at 15% 80%, rgba(56, 189, 248, 0.45) 0, transparent 60%),
+    radial-gradient(circle at 85% 75%, rgba(30, 64, 175, 0.5) 0, transparent 60%),
+    #020617;
+  filter: saturate(150%);
+  pointer-events: none;
+}
+
+.star-field {
+  position: fixed;
+  inset: -50px;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.25), transparent),
+    radial-gradient(1px 1px at 80% 70%, rgba(255, 255, 255, 0.18), transparent),
+    radial-gradient(1px 1px at 50% 10%, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0.85;
+  animation: starShift 40s linear infinite alternate;
+}
+
+@keyframes starShift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  to {
+    transform: translate3d(-60px, -80px, 0) scale(1.06);
+  }
+}
+
+.particle-layer {
+  position: fixed;
+  inset: -80px;
+  pointer-events: none;
+  background-image:
+    radial-gradient(3px 3px at 10% 20%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(2px 2px at 22% 65%, rgba(191, 219, 254, 0.7), transparent),
+    radial-gradient(2px 2px at 30% 80%, rgba(129, 140, 248, 0.6), transparent),
+    radial-gradient(2px 2px at 45% 30%, rgba(59, 130, 246, 0.7), transparent),
+    radial-gradient(3px 3px at 65% 55%, rgba(56, 189, 248, 0.65), transparent),
+    radial-gradient(2px 2px at 80% 30%, rgba(191, 219, 254, 0.6), transparent),
+    radial-gradient(3px 3px at 78% 72%, rgba(59, 130, 246, 0.55), transparent),
+    radial-gradient(2px 2px at 40% 10%, rgba(37, 99, 235, 0.5), transparent);
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  animation: floatParticles 18s ease-in-out infinite alternate;
+}
+
+@keyframes floatParticles {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(60px, -45px, 0);
+  }
+  100% {
+    transform: translate3d(-60px, 60px, 0);
+  }
+}
+
+/* Windows 11 acrylic */
+.acrylic {
+  background: rgba(15, 17, 24, 0.9);
+  backdrop-filter: blur(26px) saturate(130%);
+  -webkit-backdrop-filter: blur(26px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  border-radius: 24px;
+}
+
+.button-primary {
+  background: var(--color-win11-primary);
+  color: white;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow-acrylic);
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.button-primary:hover {
+  background: var(--color-win11-accent);
+}
+
+.input-field {
+  width: 100%;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: rgb(15, 23, 42);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.input-field::placeholder {
+  color: rgb(148, 163, 184);
+}
+
+.input-field:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.8), 0 0 0 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Page animations */
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
