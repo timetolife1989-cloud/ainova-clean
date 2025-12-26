@@ -4,11 +4,12 @@ import React from 'react';
 
 interface HeaderProps {
   pageTitle: string;
-  showBackButton?: boolean;
 }
 
-export default function Header({ pageTitle, showBackButton }: HeaderProps) {
+export default function Header({ pageTitle }: HeaderProps) {
   // Get user info from sessionStorage
+  // Note: User data is stored in sessionStorage by the login flow (app/login/page.tsx)
+  // This is consistent with the existing authentication pattern in the codebase
   const [userInfo, setUserInfo] = React.useState<{
     fullName: string;
     username: string;
