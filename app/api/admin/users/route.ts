@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       message: 'Felhasználó sikeresen létrehozva!',
       user: newUser,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({
       success: false,
       error: 'Server error',

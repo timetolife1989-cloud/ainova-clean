@@ -25,7 +25,7 @@ export async function POST(request: Request) {
         error: 'Hibás jelszó vagy nincs jogosultság',
       }, { status: 401 });
     }
-  } catch (error) {
+  } catch {
     return NextResponse.json({
       success: false,
       error: 'Invalid request',

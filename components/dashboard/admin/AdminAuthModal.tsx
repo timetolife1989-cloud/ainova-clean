@@ -15,18 +15,20 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }: AdminAuth
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
 
-  // Load username from sessionStorage
+  // Load username from sessionStorage on mount
   useEffect(() => {
-    const userStr = sessionStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setUsername(user.username || '');
-      } catch (e) {
-        console.error('Failed to parse user data:', e);
+    if (isOpen) {
+      const userStr = sessionStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setUsername(user.username || '');
+        } catch (e) {
+          console.error('Failed to parse user data:', e);
+        }
       }
     }
-  }, []);
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

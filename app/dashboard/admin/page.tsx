@@ -9,12 +9,10 @@ import AdminMenuCard from '@/components/dashboard/admin/AdminMenuCard';
 export default function AdminPage() {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
-  const [adminVerified, setAdminVerified] = useState(false);
 
   useEffect(() => {
     // Check if admin already verified (session)
     const verified = sessionStorage.getItem('adminVerified') === 'true';
-    setAdminVerified(verified);
     
     // If not verified, show modal
     if (!verified) {
@@ -75,7 +73,6 @@ export default function AdminPage() {
         isOpen={showModal}
         onClose={() => router.back()}
         onSuccess={() => {
-          setAdminVerified(true);
           setShowModal(false);
         }}
       />

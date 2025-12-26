@@ -7,11 +7,9 @@ import { useState } from 'react';
 
 export default function UserCreatePage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (data: UserFormData) => {
-    setLoading(true);
     setError(null);
     
     try {
@@ -36,8 +34,6 @@ export default function UserCreatePage() {
       } else {
         setError('An unexpected error occurred');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
