@@ -20,28 +20,19 @@ export default function MenuTile({
   const router = useRouter();
 
   // Determine colors based on variant
-  const borderHoverColor = variant === 'admin' ? 'border-purple-600' : 'border-blue-600';
-  const shadowHoverColor = variant === 'admin' ? 'shadow-purple-900/50' : 'shadow-blue-900/50';
-  const arrowColor = variant === 'admin' ? 'text-purple-400' : 'text-blue-400';
+  const isAdmin = variant === 'admin';
+  const baseClasses = "relative bg-gray-900/50 backdrop-blur-md border border-gray-800 rounded-xl p-6 shadow-lg cursor-pointer transition-all duration-300 hover:shadow-2xl";
+  const variantClasses = isAdmin 
+    ? "hover:border-purple-600 hover:shadow-purple-900/50" 
+    : "hover:border-blue-600 hover:shadow-blue-900/50";
+  const arrowColor = isAdmin ? 'text-purple-400' : 'text-blue-400';
 
   return (
     <motion.div
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
       onClick={() => router.push(href)}
-      className={`
-        relative
-        bg-gray-900/50 backdrop-blur-md
-        border border-gray-800
-        rounded-xl
-        p-6
-        shadow-lg
-        cursor-pointer
-        transition-all duration-300
-        hover:${borderHoverColor}
-        hover:shadow-2xl
-        hover:${shadowHoverColor}
-      `}
+      className={`${baseClasses} ${variantClasses}`}
     >
       {/* Icon - top-left corner */}
       <div className="text-5xl opacity-90 mb-4">
