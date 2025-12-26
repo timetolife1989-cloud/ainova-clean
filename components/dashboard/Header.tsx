@@ -1,12 +1,15 @@
 'use client';
 import { motion } from 'framer-motion';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   pageTitle: string;
+  showBackButton?: boolean;
 }
 
-export default function Header({ pageTitle }: HeaderProps) {
+export default function Header({ pageTitle, showBackButton = false }: HeaderProps) {
+  const router = useRouter();
   // Get user info from sessionStorage
   // Note: User data is stored in sessionStorage by the login flow (app/login/page.tsx)
   // This is consistent with the existing authentication pattern in the codebase
@@ -97,7 +100,17 @@ export default function Header({ pageTitle }: HeaderProps) {
         )}
 
         {/* 3. Page Title (dynamic) */}
-        <div className="flex-1 px-6">
+        <div className="flex-1 px-6 flex items-center gap-4">
+          {/* Back Button (optional) */}
+          {showBackButton && (
+            <button
+              onClick={() => router.back()}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              ← Vissza
+            </button>
+          )}
+          
           <motion.h2
             key={pageTitle}
             initial={{ opacity: 0, y: -10 }}
@@ -108,6 +121,20 @@ export default function Header({ pageTitle }: HeaderProps) {
           >
             {pageTitle}
           </motion.h2>
+        </div>
+
+        {/* 4. Logout Button */}
+        <div className="px-6">
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('user');
+              sessionStorage.removeItem('adminVerified');
+              router.push('/login');
+            }}
+            className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg transition-colors text-sm font-medium"
+          >
+            Kilépés
+          </button>
         </div>
       </div>
     </header>
