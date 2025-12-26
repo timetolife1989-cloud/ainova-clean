@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Card from '@/components/Card';
+import Header from '@/components/dashboard/Header';
 
 interface User {
   userId: number;
@@ -60,8 +61,13 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-10">
-      <div className="max-w-2xl w-full space-y-6">
+    <>
+      {/* Fixed Header */}
+      <Header pageTitle="VEZÉRLŐPULT" />
+      
+      {/* Main content with top padding to account for fixed header */}
+      <main className="min-h-screen pt-[80px] flex items-center justify-center px-4 py-10">
+        <div className="max-w-2xl w-full space-y-6">
         {/* Header Card */}
         <Card>
           <div className="flex items-center justify-between">
@@ -152,5 +158,6 @@ export default function DashboardPage() {
         </div>
       </div>
     </main>
+    </>
   );
 }
