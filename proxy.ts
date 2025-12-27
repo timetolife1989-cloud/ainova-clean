@@ -18,6 +18,7 @@ import { validateSession } from '@/lib/auth';
 const PUBLIC_ROUTES = new Set([
   '/login',
   '/api/auth/login',
+  '/api/weather', // Weather API is public (used by WeatherWidget)
 ]);
 
 /**
