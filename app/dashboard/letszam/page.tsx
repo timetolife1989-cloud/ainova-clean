@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@/components/dashboard';
 import MuszakSelector from '@/components/letszam/MuszakSelector';
 import DateSelector from '@/components/letszam/DateSelector';
-import LetszamTable, { LetszamRow } from '@/components/letszam/LetszamTable';
+import LetszamTable from '@/components/letszam/LetszamTable';
+import type { LetszamRow } from '@/components/letszam/types';
 import LetszamSummary from '@/components/letszam/LetszamSummary';
 import KritikusPozicioModal from '@/components/letszam/KritikusPozicioModal';
 
@@ -141,7 +142,8 @@ export default function LetszamPage() {
   // Actual save function
   const saveData = () => {
     console.log('Létszám adatok mentve:', formData);
-    alert('Létszám adatok mentve! (Backend később jön)');
+    // TODO: Add API call here when backend is ready
+    // TODO: Show success toast notification
     router.push('/dashboard');
   };
 

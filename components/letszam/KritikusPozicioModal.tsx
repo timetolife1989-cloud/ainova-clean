@@ -33,7 +33,8 @@ export default function KritikusPozicioModal({
       setShowIndoklasForm(false);
       setIndoklas({ miert: '', meddig: '', terv: '' });
     } else {
-      alert('Kérlek, töltsd ki az összes mezőt!');
+      // TODO: Replace with toast notification when available
+      console.warn('Validation failed: All fields are required');
     }
   };
 

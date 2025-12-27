@@ -1,14 +1,7 @@
 'use client';
 import { motion } from 'framer-motion';
 import { useRef, KeyboardEvent } from 'react';
-
-export interface LetszamRow {
-  pozicio: string;
-  megjelent: number;
-  tappenz: number;
-  szabadsag: number;
-  hianyzasPercent: number;
-}
+import type { LetszamRow } from './types';
 
 interface LetszamTableProps {
   title: string;

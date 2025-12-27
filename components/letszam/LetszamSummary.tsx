@@ -1,12 +1,5 @@
 'use client';
-
-export interface LetszamRow {
-  pozicio: string;
-  megjelent: number;
-  tappenz: number;
-  szabadsag: number;
-  hianyzasPercent: number;
-}
+import type { LetszamRow } from './types';
 
 interface LetszamSummaryProps {
   data: LetszamRow[];
