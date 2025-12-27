@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import WeatherWidget from '@/components/weather/WeatherWidget';
 
 interface HeaderProps {
   pageTitle: string;
@@ -123,8 +124,9 @@ export default function Header({ pageTitle, showBackButton = false }: HeaderProp
           </motion.h2>
         </div>
 
-        {/* 4. Logout Button */}
-        <div className="px-6">
+        {/* 4. Weather Widget and Logout Button */}
+        <div className="flex items-center gap-4 px-6">
+          <WeatherWidget />
           <button
             onClick={() => {
               sessionStorage.removeItem('user');
