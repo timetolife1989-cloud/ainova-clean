@@ -1,5 +1,45 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Setup
+
+### Required Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# Database Configuration
+DB_SERVER=your_server
+DB_DATABASE=your_database
+DB_USER=your_user
+DB_PASSWORD=your_password
+
+# Weather Widget (Optional - OpenWeatherMap API)
+WEATHER_API_KEY=your_openweathermap_api_key
+WEATHER_LOCATION=Budapest,HU
+WEATHER_UNITS=metric
+WEATHER_LANGUAGE=hu
+```
+
+### Weather Widget Setup
+
+The dashboard includes a real-time weather widget in the header. To enable it:
+
+1. **Get a free API key:**
+   - Sign up at: https://home.openweathermap.org/users/sign_up
+   - Free tier: 1,000 calls/day (more than enough for this app)
+
+2. **Configure environment variables:**
+   - Copy `.env.local.example` to `.env.local`
+   - Add your `WEATHER_API_KEY`
+   - Optionally customize location, units, and language
+
+3. **Restart the dev server:**
+   ```bash
+   npm run dev
+   ```
+
+**Note:** The widget displays a fallback state ("N/A") if the API key is not configured. The application works fine without it.
+
 ## Getting Started
 
 First, run the development server:
