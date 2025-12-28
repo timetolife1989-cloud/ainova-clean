@@ -83,8 +83,10 @@ export default function LetszamPage() {
         // const response = await fetch(`/api/letszam?datum=${dateStr}&muszak=${selectedMuszak}`);
         // const data = await response.json();
         
-        // Simulate API delay for smooth loading animation (remove in production)
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Simulate API delay for smooth loading animation in development
+        if (process.env.NODE_ENV === 'development') {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
 
         if (!isMounted) return;
 
