@@ -83,7 +83,8 @@ export default function LetszamPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
   // Track request sequence to prevent out-of-order responses
-  const requestIdRef = useRef<number>(0);
+  // Using crypto.randomUUID() for robust request tracking
+  const requestIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Modal state
@@ -108,8 +109,9 @@ export default function LetszamPage() {
 
       if (!response.ok) {
         // API exists but returned error
-        if (response.status === 404) {
-          // API not implemented yet - return success with default data
+        if (response.status === 404 || response.status === 501) {
+          // API not implemented yet (404) or explicitly not implemented (501)
+          // Return success with default data
           return { success: true };
         }
         throw new Error(`API error: ${response.status}`);
@@ -123,9 +125,9 @@ export default function LetszamPage() {
           throw error; // Re-throw abort errors
         }
         
-        // Check if it's a fetch error (API doesn't exist)
-        if (error.message.includes('fetch')) {
-          // API not implemented yet - return success with no data (will use defaults)
+        // Check if it's a fetch error (API doesn't exist) using TypeError
+        if (error instanceof TypeError) {
+          // Network error or fetch failure - API not implemented yet
           return { success: true };
         }
       }
@@ -149,8 +151,9 @@ export default function LetszamPage() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    // Increment request ID to track this request
-    const currentRequestId = ++requestIdRef.current;
+    // Generate unique request ID for this request
+    const currentRequestId = crypto.randomUUID();
+    requestIdRef.current = currentRequestId;
 
     const loadData = async () => {
       setIsLoading(true);
@@ -262,11 +265,23 @@ export default function LetszamPage() {
       nemOperativ: nemOperativData,
     };
 
-    // Validate payload
-    const hasData = payload.operativ.length > 0 && payload.nemOperativ.length > 0;
-    if (!hasData) {
-      throw new Error('Invalid save payload: missing data');
+    // Validate payload structure
+    if (!Array.isArray(payload.operativ) || payload.operativ.length === 0) {
+      throw new Error('Invalid save payload: operativ data missing');
     }
+    if (!Array.isArray(payload.nemOperativ) || payload.nemOperativ.length === 0) {
+      throw new Error('Invalid save payload: nemOperativ data missing');
+    }
+    
+    // Validate that data has proper structure
+    const validateRow = (row: LetszamRow, type: string) => {
+      if (!row.pozicio || typeof row.megjelent !== 'number') {
+        throw new Error(`Invalid ${type} data: missing required fields`);
+      }
+    };
+    
+    payload.operativ.forEach((row) => validateRow(row, 'operativ'));
+    payload.nemOperativ.forEach((row) => validateRow(row, 'nemOperativ'));
 
     return payload;
   };
