@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoginContainer from '@/components/login/LoginContainer';
 import AinovaLogo from '@/components/login/AinovaLogo';
@@ -7,6 +7,9 @@ import InputField from '@/components/login/InputField';
 import RippleButton from '@/components/login/RippleButton';
 import ToastNotification from '@/components/login/ToastNotification';
 import InteractiveBackground from '@/components/login/InteractiveBackground';
+
+// Prevent static generation due to useSearchParams
+export const dynamic = 'force-dynamic';
 
 // Error message mapping (magyar)
 const errorMessages: Record<string, string> = {
@@ -20,7 +23,7 @@ const errorMessages: Record<string, string> = {
   'Login failed': 'Bejelentkezés sikertelen. Ellenőrizd az adatokat.',
 };
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState('');
@@ -169,5 +172,13 @@ export default function LoginPage() {
         onHide={() => setToastVisible(false)}
       />
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
