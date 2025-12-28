@@ -69,7 +69,7 @@ export default function LetszamPage() {
     { pozicio: string; count: number }[]
   >([]);
 
-  // useEffect with isMounted cleanup (memory leak és stale state védelem)
+  // useEffect with isMounted cleanup (prevents memory leaks and stale state)
   useEffect(() => {
     let isMounted = true;
 
@@ -83,7 +83,7 @@ export default function LetszamPage() {
         // const response = await fetch(`/api/letszam?datum=${dateStr}&muszak=${selectedMuszak}`);
         // const data = await response.json();
         
-        // Simulate API delay for smooth loading animation
+        // Simulate API delay for smooth loading animation (remove in production)
         await new Promise(resolve => setTimeout(resolve, 300));
 
         if (!isMounted) return;
@@ -155,6 +155,14 @@ export default function LetszamPage() {
     return hianyok;
   };
 
+  // Helper to build form data object from state
+  const buildFormData = () => ({
+    muszak: selectedMuszak,
+    datum: selectedDatum,
+    operativ: operativData,
+    nemOperativ: nemOperativData,
+  });
+
   // Save handler
   const handleSave = () => {
     // Check kritikus pozíciók
@@ -176,26 +184,14 @@ export default function LetszamPage() {
     meddig: string;
     terv: string;
   }) => {
-    const formData = {
-      muszak: selectedMuszak,
-      datum: selectedDatum,
-      operativ: operativData,
-      nemOperativ: nemOperativData,
-    };
-    console.log('Mentés indoklással:', { formData, indoklas });
+    console.log('Mentés indoklással:', { formData: buildFormData(), indoklas });
     saveData();
     setShowKritikusModal(false);
   };
 
   // Actual save function
   const saveData = () => {
-    const formData = {
-      muszak: selectedMuszak,
-      datum: selectedDatum,
-      operativ: operativData,
-      nemOperativ: nemOperativData,
-    };
-    console.log('Létszám adatok mentve:', formData);
+    console.log('Létszám adatok mentve:', buildFormData());
     // TODO: Add API call here when backend is ready
     // TODO: Show success toast notification
     router.push('/dashboard');
