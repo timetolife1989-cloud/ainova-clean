@@ -104,10 +104,10 @@ export default function LetszamTable({
               const critical = isCritical(row.pozicio);
               return (
                 <motion.tr
-                  key={row.pozicio}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.03 }}
+                  key={`${row.pozicio}-${index}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.02, duration: 0.2 }}
                   className={`
                     border-b border-slate-800 transition-colors duration-200
                     hover:bg-slate-800

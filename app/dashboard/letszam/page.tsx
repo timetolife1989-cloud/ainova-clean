@@ -1,6 +1,6 @@
 'use client';
-import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/dashboard';
 import MuszakSelector from '@/components/letszam/MuszakSelector';
@@ -34,35 +34,34 @@ const NEM_OPERATIV_POZICIOK = [
 
 const KRITIKUS_POZICIOK = ['Mérő', 'Csomagoló', 'Minőségellenőr'];
 
-interface LetszamFormData {
-  muszak: 'A' | 'B' | 'C';
-  datum: Date;
-  operativ: LetszamRow[];
-  nemOperativ: LetszamRow[];
-}
+// Default factory functions for clean initial state
+const createDefaultOperativ = (): LetszamRow[] =>
+  OPERATIV_POZICIOK.map((p) => ({
+    pozicio: p,
+    megjelent: 0,
+    tappenz: 0,
+    szabadsag: 0,
+    hianyzasPercent: 0,
+  }));
+
+const createDefaultNemOperativ = (): LetszamRow[] =>
+  NEM_OPERATIV_POZICIOK.map((p) => ({
+    pozicio: p,
+    megjelent: 0,
+    tappenz: 0,
+    szabadsag: 0,
+    hianyzasPercent: 0,
+  }));
 
 export default function LetszamPage() {
   const router = useRouter();
 
-  // Initialize form state
-  const [formData, setFormData] = useState<LetszamFormData>({
-    muszak: 'A',
-    datum: new Date(),
-    operativ: OPERATIV_POZICIOK.map((p) => ({
-      pozicio: p,
-      megjelent: 0,
-      tappenz: 0,
-      szabadsag: 0,
-      hianyzasPercent: 0,
-    })),
-    nemOperativ: NEM_OPERATIV_POZICIOK.map((p) => ({
-      pozicio: p,
-      megjelent: 0,
-      tappenz: 0,
-      szabadsag: 0,
-      hianyzasPercent: 0,
-    })),
-  });
+  // Separate state for datum/muszak and data (no nested object conflict)
+  const [selectedDatum, setSelectedDatum] = useState<Date>(new Date());
+  const [selectedMuszak, setSelectedMuszak] = useState<'A' | 'B' | 'C'>('A');
+  const [operativData, setOperativData] = useState<LetszamRow[]>(createDefaultOperativ());
+  const [nemOperativData, setNemOperativData] = useState<LetszamRow[]>(createDefaultNemOperativ());
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Modal state
   const [showKritikusModal, setShowKritikusModal] = useState(false);
@@ -70,9 +69,52 @@ export default function LetszamPage() {
     { pozicio: string; count: number }[]
   >([]);
 
+  // useEffect with isMounted cleanup (memory leak és stale state védelem)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Format date for API call
+        const dateStr = selectedDatum.toISOString().split('T')[0];
+        
+        // TODO: Replace with actual API call when backend is ready
+        // const response = await fetch(`/api/letszam?datum=${dateStr}&muszak=${selectedMuszak}`);
+        // const data = await response.json();
+        
+        // Simulate API delay for smooth loading animation
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        if (!isMounted) return;
+
+        // For now, use default data (will be replaced with API data)
+        setOperativData(createDefaultOperativ());
+        setNemOperativData(createDefaultNemOperativ());
+      } catch (error) {
+        console.error('Error fetching létszám data:', error);
+        // Fallback to default data on error
+        if (isMounted) {
+          setOperativData(createDefaultOperativ());
+          setNemOperativData(createDefaultNemOperativ());
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDatum, selectedMuszak]);
+
   // Handler for operativ data changes
   const handleOperativChange = (index: number, field: string, value: number) => {
-    const updated = [...formData.operativ];
+    const updated = [...operativData];
     updated[index] = { ...updated[index], [field]: value };
 
     // Auto-calculate hiányzás %
@@ -81,12 +123,12 @@ export default function LetszamPage() {
     row.hianyzasPercent =
       total > 0 ? ((row.tappenz + row.szabadsag) / total) * 100 : 0;
 
-    setFormData({ ...formData, operativ: updated });
+    setOperativData(updated);
   };
 
   // Handler for nem operativ data changes
   const handleNemOperativChange = (index: number, field: string, value: number) => {
-    const updated = [...formData.nemOperativ];
+    const updated = [...nemOperativData];
     updated[index] = { ...updated[index], [field]: value };
 
     // Auto-calculate hiányzás %
@@ -95,12 +137,12 @@ export default function LetszamPage() {
     row.hianyzasPercent =
       total > 0 ? ((row.tappenz + row.szabadsag) / total) * 100 : 0;
 
-    setFormData({ ...formData, nemOperativ: updated });
+    setNemOperativData(updated);
   };
 
   // Check critical positions
   const checkKritikusPoziciok = (): { pozicio: string; count: number }[] => {
-    const allData = [...formData.operativ, ...formData.nemOperativ];
+    const allData = [...operativData, ...nemOperativData];
     const hianyok: { pozicio: string; count: number }[] = [];
 
     KRITIKUS_POZICIOK.forEach((kritikus) => {
@@ -134,6 +176,12 @@ export default function LetszamPage() {
     meddig: string;
     terv: string;
   }) => {
+    const formData = {
+      muszak: selectedMuszak,
+      datum: selectedDatum,
+      operativ: operativData,
+      nemOperativ: nemOperativData,
+    };
     console.log('Mentés indoklással:', { formData, indoklas });
     saveData();
     setShowKritikusModal(false);
@@ -141,6 +189,12 @@ export default function LetszamPage() {
 
   // Actual save function
   const saveData = () => {
+    const formData = {
+      muszak: selectedMuszak,
+      datum: selectedDatum,
+      operativ: operativData,
+      nemOperativ: nemOperativData,
+    };
     console.log('Létszám adatok mentve:', formData);
     // TODO: Add API call here when backend is ready
     // TODO: Show success toast notification
@@ -162,74 +216,99 @@ export default function LetszamPage() {
           {/* Header Controls */}
           <div className="mb-8 p-6 bg-slate-900/50 border border-slate-700 rounded-lg flex flex-wrap items-center gap-6">
             <MuszakSelector
-              selected={formData.muszak}
-              onChange={(muszak) => setFormData({ ...formData, muszak })}
+              selected={selectedMuszak}
+              onChange={setSelectedMuszak}
             />
             <DateSelector
-              selected={formData.datum}
-              onChange={(datum) => setFormData({ ...formData, datum })}
+              selected={selectedDatum}
+              onChange={setSelectedDatum}
             />
           </div>
 
-          {/* Operatív Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <LetszamTable
-              title="🔧 OPERATÍV LÉTSZÁM"
-              positions={OPERATIV_POZICIOK}
-              data={formData.operativ}
-              onChange={handleOperativChange}
-              isOperativ={true}
-              criticalPositions={KRITIKUS_POZICIOK}
-            />
-            <LetszamSummary data={formData.operativ} isOperativ={true} />
-          </motion.div>
+          <AnimatePresence mode="wait">
+            {isLoading ? (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center py-20"
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-slate-400">Adatok betöltése...</p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Operatív Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <LetszamTable
+                    title="🔧 OPERATÍV LÉTSZÁM"
+                    positions={OPERATIV_POZICIOK}
+                    data={operativData}
+                    onChange={handleOperativChange}
+                    isOperativ={true}
+                    criticalPositions={KRITIKUS_POZICIOK}
+                  />
+                  <LetszamSummary data={operativData} isOperativ={true} />
+                </motion.div>
 
-          {/* Nem Operatív Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mt-12"
-          >
-            <LetszamTable
-              title="👔 NEM OPERATÍV LÉTSZÁM"
-              positions={NEM_OPERATIV_POZICIOK}
-              data={formData.nemOperativ}
-              onChange={handleNemOperativChange}
-              isOperativ={false}
-              criticalPositions={KRITIKUS_POZICIOK}
-            />
-            <LetszamSummary data={formData.nemOperativ} isOperativ={false} />
-          </motion.div>
+                {/* Nem Operatív Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="mt-12"
+                >
+                  <LetszamTable
+                    title="👔 NEM OPERATÍV LÉTSZÁM"
+                    positions={NEM_OPERATIV_POZICIOK}
+                    data={nemOperativData}
+                    onChange={handleNemOperativChange}
+                    isOperativ={false}
+                    criticalPositions={KRITIKUS_POZICIOK}
+                  />
+                  <LetszamSummary data={nemOperativData} isOperativ={false} />
+                </motion.div>
 
-          {/* Action Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 flex justify-center gap-4"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push('/dashboard')}
-              className="px-8 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-colors"
-            >
-              Mégse
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleSave}
-              className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors shadow-lg shadow-blue-900/50"
-            >
-              Mentés
-            </motion.button>
-          </motion.div>
+                {/* Action Buttons */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-8 flex justify-center gap-4"
+                >
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => router.push('/dashboard')}
+                    className="px-8 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Mégse
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSave}
+                    className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors shadow-lg shadow-blue-900/50"
+                  >
+                    Mentés
+                  </motion.button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.main>
 
