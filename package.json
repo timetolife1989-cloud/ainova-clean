@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:setup": "echo 'Run scripts/setup-ainova-users.sql in SQL Server Management Studio (SSMS)'",
+    "db:test": "node scripts/test-db-connection.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
     "mssql": "^10.0.0",
     "next": "16.1.0",

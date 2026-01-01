@@ -25,7 +25,7 @@ body {
   position: fixed;
   inset: 0;
   background:
-    linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)),
+    linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)),
     radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.6) 0, transparent 60%),
     radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.5) 0, transparent 60%),
     radial-gradient(circle at 15% 80%, rgba(56, 189, 248, 0.45) 0, transparent 60%),
@@ -69,7 +69,7 @@ body {
     radial-gradient(3px 3px at 78% 72%, rgba(59, 130, 246, 0.55), transparent),
     radial-gradient(2px 2px at 40% 10%, rgba(37, 99, 235, 0.5), transparent);
   mix-blend-mode: screen;
-  opacity: 0.7;
+  opacity: 0.75;
   animation: floatParticles 18s ease-in-out infinite alternate;
 }
 

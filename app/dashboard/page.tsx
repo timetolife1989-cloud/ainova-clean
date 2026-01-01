@@ -1,8 +1,22 @@
 'use client';
 import { motion } from 'framer-motion';
 import { Header, MenuTile } from '@/components/dashboard';
+import MaintenanceModal from '@/components/dashboard/MaintenanceModal';
+import React from 'react';
 
 export default function DashboardPage() {
+  const [maintenanceModal, setMaintenanceModal] = React.useState<{
+    isOpen: boolean;
+    title: string;
+  }>({ isOpen: false, title: '' });
+
+  const showMaintenance = (title: string) => {
+    setMaintenanceModal({ isOpen: true, title });
+  };
+
+  const closeMaintenance = () => {
+    setMaintenanceModal({ isOpen: false, title: '' });
+  };
   return (
     <>
       {/* Header - already exists, DO NOT MODIFY */}
@@ -14,10 +28,11 @@ export default function DashboardPage() {
         animate={{ x: 0 }}
         exit={{ x: '-100%' }}
         transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-        className="min-h-screen pt-[100px] p-8"
+        className="min-h-screen pt-[100px] px-8 py-12"
       >
-        <div className="max-w-2xl mx-auto space-y-6">
-          {/* 3 Module Tiles */}
+        {/* Left-aligned narrow tiles */}
+        <div className="max-w-xs space-y-4">
+          {/* 3 Module Tiles - Under Maintenance */}
           <MenuTile
             icon="👷"
             title="LÉTSZÁM RÖGZÍTÉS"
@@ -27,9 +42,10 @@ export default function DashboardPage() {
           
           <MenuTile
             icon="📊"
-            title="TELJESÍTMÉNY ADAT RÖGZÍTÉS"
-            description="Gépenként teljesítmény nyomon"
+            title="TELJESÍTMÉNY ADATOK"
+            description="Teljesítmény adatok rögzítése"
             href="/dashboard/teljesitmeny"
+            onClick={() => showMaintenance('TELJESÍTMÉNY ADATOK')}
           />
           
           <MenuTile
@@ -37,9 +53,10 @@ export default function DashboardPage() {
             title="GÉPADAT RÖGZÍTÉS"
             description="Gépek állapota és paraméterei"
             href="/dashboard/gepadat"
+            onClick={() => showMaintenance('GÉPADAT RÖGZÍTÉS')}
           />
           
-          {/* Admin Panel Tile (purple variant) */}
+          {/* Admin Panel Tile (purple variant) - Active */}
           <MenuTile
             icon="🔐"
             title="ADMIN PANEL"
@@ -49,6 +66,13 @@ export default function DashboardPage() {
           />
         </div>
       </motion.main>
+
+      {/* Maintenance Modal */}
+      <MaintenanceModal
+        isOpen={maintenanceModal.isOpen}
+        onClose={closeMaintenance}
+        title={maintenanceModal.title}
+      />
     </>
   );
 }

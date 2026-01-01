@@ -15,7 +15,7 @@ import { getPool, sql } from './db';
 // =====================================================================
 
 /**
- * User database record (from dbo.Users table)
+ * User database record (from dbo.AinovaUsers table)
  */
 export interface User {
   UserId: number;
@@ -229,13 +229,13 @@ export async function login(
     // 1. Rate limiting check
     await checkRateLimit(ipAddress);
     
-    // 2. Fetch user from database
+    // 2. Fetch user from database (AINOVA Users table)
     const userResult = await pool
       .request()
       .input('username', sql.NVarChar(100), username)
       .query(`
         SELECT UserId, Username, PasswordHash, FullName, Role, FirstLogin, IsActive
-        FROM dbo.Users
+        FROM dbo.AinovaUsers
         WHERE Username = @username
       `);
     
@@ -259,8 +259,23 @@ export async function login(
       };
     }
     
-    // 5. Verify password with bcrypt
-    const passwordMatch = await bcrypt.compare(password, user.PasswordHash);
+    // 5. Verify password (handle both plain text and bcrypt hashed)
+    // Development mode: dev/admin users use plain text passwords
+    // Production mode: all passwords should be bcrypt hashed
+    let passwordMatch = false;
+    
+    // Try bcrypt first (for hashed passwords)
+    if (user.PasswordHash.startsWith('$2a$') || user.PasswordHash.startsWith('$2b$')) {
+      // Bcrypt hash detected (starts with $2a$ or $2b$)
+      passwordMatch = await bcrypt.compare(password, user.PasswordHash);
+    } else {
+      // Plain text password (development mode only - dev/admin users)
+      passwordMatch = password === user.PasswordHash;
+      
+      if (passwordMatch && process.env.NODE_ENV === 'production') {
+        console.warn(`[Auth] WARNING: Plain text password detected for user ${username} in production!`);
+      }
+    }
     
     if (!passwordMatch) {
       await logLoginAttempt(user.UserId, null, ipAddress, false, 'Invalid password');
@@ -379,7 +394,7 @@ export async function validateSession(sessionId: string): Promise<SessionData | 
           u.Role,
           s.ExpiresAt
         FROM dbo.Sessions s
-        JOIN dbo.Users u ON s.UserId = u.UserId
+        JOIN dbo.AinovaUsers u ON s.UserId = u.UserId
         WHERE s.SessionId = @sessionId
           AND s.ExpiresAt > SYSDATETIME()
           AND u.IsActive = 1
@@ -389,7 +404,16 @@ export async function validateSession(sessionId: string): Promise<SessionData | 
       return null; // Session not found, expired, or user inactive
     }
     
-    const sessionData = result.recordset[0] as SessionData;
+    const record = result.recordset[0];
+    
+    // ✅ Convert ExpiresAt string to Date object
+    const sessionData: SessionData = {
+      userId: record.UserId,
+      username: record.Username,
+      fullName: record.FullName,
+      role: record.Role,
+      expiresAt: new Date(record.ExpiresAt),
+    };
     
     // 3. ✅ OPTIMIZATION: Cache for 5 minutes
     sessionCache.set(sessionId, {

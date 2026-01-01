@@ -1,16 +1,13 @@
 // =====================================================================
-// AINOVA - Authentication Proxy
+// AINOVA - Next.js Middleware (Edge Runtime Compatible)
 // =====================================================================
-// Purpose:  Protect routes that require authentication
-// Public routes: /login, /api/auth/login, static files
-// Protected routes: Everything else (dashboard, API endpoints, etc.)
-// Action: Redirect to /login if not authenticated
-// SECURITY: Session validation, cookie-based auth, user context headers
-// PRODUCTION-READY: Fail-closed (prod), fail-open (dev), invalid session cleanup
+// Purpose: Protect routes that require authentication
+// Runtime: Edge Runtime (NO Node.js APIs - uses fetch instead)
+// Security: Validates sessionId cookie via API endpoint
+// Function: middleware (Next.js standard naming)
 // =====================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from '@/lib/auth';
 
 /**
  * Public routes that don't require authentication
@@ -18,6 +15,7 @@ import { validateSession } from '@/lib/auth';
 const PUBLIC_ROUTES = new Set([
   '/login',
   '/api/auth/login',
+  '/api/auth/validate-session', // Must be public so middleware can call it
 ]);
 
 /**
@@ -26,7 +24,7 @@ const PUBLIC_ROUTES = new Set([
 const PUBLIC_PREFIXES = [
   /^\/_next\//,
   /^\/favicon\.ico$/,
-  /^\/.*\. (?:png|jpg|jpeg|gif|svg|ico|webp)$/i,
+  /^\/.*\.(?:png|jpg|jpeg|gif|svg|ico|webp)$/i,
 ];
 
 /**
@@ -36,7 +34,7 @@ function isPublicPath(pathname: string): boolean {
   if (PUBLIC_ROUTES.has(pathname)) {
     return true;
   }
-  return PUBLIC_PREFIXES. some(pattern => pattern.test(pathname));
+  return PUBLIC_PREFIXES.some(pattern => pattern.test(pathname));
 }
 
 /**
@@ -44,16 +42,15 @@ function isPublicPath(pathname: string): boolean {
  */
 function redirectToLogin(request: NextRequest): NextResponse {
   const loginUrl = new URL('/login', request.url);
-  loginUrl.searchParams.set('returnUrl', request. nextUrl.pathname);
+  loginUrl.searchParams.set('returnUrl', request.nextUrl.pathname);
   return NextResponse.redirect(loginUrl);
 }
 
-// =====================================================================
-// 🔥 NEXT.JS 16: Function MUST be named "proxy" (not "middleware")
-// =====================================================================
 /**
- * Proxy:  Protect routes that require authentication
- * Validates session cookie and adds user context to request headers
+ * Proxy: Protect routes that require authentication
+ * ⚠️ EDGE RUNTIME: Cannot import lib/auth.ts (uses Node.js APIs)
+ * ✅ SOLUTION: Use fetch() to call /api/auth/validate-session
+ * 🔥 NEXT.JS 16: Function MUST be named "proxy" (not "middleware")
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -68,31 +65,47 @@ export async function proxy(request: NextRequest) {
   
   // 3. No session cookie → redirect to login
   if (!sessionId) {
-    console.log(`[Proxy] No session cookie, redirecting to login:  ${pathname}`);
+    console.log(`[Proxy] No session cookie, redirecting to login: ${pathname}`);
     return redirectToLogin(request);
   }
   
-  // 4. Validate session in database
+  // 4. Validate session via API endpoint (Edge Runtime → Node.js Runtime)
   try {
-    const session = await validateSession(sessionId);
+    // ✅ Build absolute URL for internal API call
+    const validateUrl = new URL('/api/auth/validate-session', request.url);
+    
+    // ✅ Call validation API with session ID
+    const response = await fetch(validateUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+    
+    const data = await response.json();
     
     // Session invalid or expired → redirect to login
-    if (!session) {
-      console.log(`[Proxy] Invalid/expired session, redirecting to login:  ${pathname}`);
+    if (!data.valid) {
+      console.log(`[Proxy] Invalid/expired session, redirecting to login: ${pathname}`);
       
       // ✅ SECURITY: Clear invalid session cookie
-      const response = redirectToLogin(request);
-      response.cookies.delete('sessionId');
-      return response;
+      const redirectResponse = redirectToLogin(request);
+      redirectResponse.cookies.delete('sessionId');
+      return redirectResponse;
     }
     
     // 5. ✅ Session valid - add user info to request headers
     // API routes can access user data via headers without re-querying DB
     const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-user-id', session.userId.toString());
-    requestHeaders.set('x-username', session.username);
-    requestHeaders.set('x-user-role', session.role);
-    requestHeaders.set('x-user-fullname', session. fullName);
+    
+    // ✅ Safely set headers only if data exists
+    if (data.userId) requestHeaders.set('x-user-id', data.userId.toString());
+    if (data.username) requestHeaders.set('x-username', data.username);
+    if (data.role) requestHeaders.set('x-user-role', data.role);
+    if (data.fullName) requestHeaders.set('x-user-fullname', data.fullName);
+    
+    console.log(`[Proxy] Session valid: ${pathname}, user=${data.username || 'unknown'}`);
     
     // Continue to requested page with user context
     return NextResponse.next({
@@ -103,7 +116,7 @@ export async function proxy(request: NextRequest) {
     
   } catch (error) {
     // ✅ SECURITY POLICY: Session validation failure handling
-    // - Production:  Fail-closed (503) = maximum security, deny access on DB errors
+    // - Production: Fail-closed (503) = maximum security, deny access on DB errors
     // - Development: Fail-open (allow) = developer convenience, don't block on transient errors
     console.error('[Proxy] Session validation error:', error);
     
@@ -111,8 +124,8 @@ export async function proxy(request: NextRequest) {
       // Production: Block access during DB outages (security priority)
       return NextResponse.json(
         {
-          error:  'Service temporarily unavailable',
-          message:  'Please try again in a moment',
+          error: 'Service temporarily unavailable',
+          message: 'Please try again in a moment',
         },
         { status: 503 }
       );
@@ -124,21 +137,15 @@ export async function proxy(request: NextRequest) {
   }
 }
 
-// =====================================================================
-// Proxy configuration
-// =====================================================================
+// ✅ NEXT.JS 16 COMPATIBILITY: Export as both "proxy" (new) and "middleware" (legacy)
+export { proxy as middleware };
+
 /**
+ * Proxy configuration
  * Specifies which routes this proxy applies to
  */
 export const config = {
   matcher: [
-    '/((?! _next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
-
-// =====================================================================
-// 🔥 NEXT.JS 16: Runtime export REMOVED
-// =====================================================================
-// Proxy ALWAYS runs on Node.js runtime (automatic in Next.js 16)
-// Manual runtime export is NOT allowed and causes error
-// =====================================================================

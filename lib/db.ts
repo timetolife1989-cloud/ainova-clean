@@ -11,18 +11,19 @@
 import sql from 'mssql';
 
 // =====================================================================
-// 🔴 FIX #2: ENVIRONMENT VARIABLE VALIDATION
+// 🔴 FIX #2: ENVIRONMENT VARIABLE VALIDATION (DEVELOPMENT-FRIENDLY)
 // =====================================================================
 // Validate required environment variables at module load time
 // Only on server-side (not during client-side rendering)
+// Validation is optional for mock APIs - only enforced when getPool() is called
 if (typeof window === 'undefined') {
   const requiredEnvVars = ['DB_SERVER', 'DB_DATABASE', 'DB_USER', 'DB_PASSWORD'];
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
   if (missingVars.length > 0) {
-    throw new Error(
-      `Missing required environment variables: ${missingVars.join(', ')}\n` +
-      'Please check your .env.local file.'
+    console.warn(
+      `[DB] Warning: Missing environment variables: ${missingVars.join(', ')}\n` +
+      'Database connection will fail if attempted. Check your .env.local file.'
     );
   }
 }
@@ -37,15 +38,15 @@ const config: sql.config = {
   password: process.env.DB_PASSWORD!,
   port: parseInt(process.env.DB_PORT || '1433'),
   options: {
-    encrypt: process.env.DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+    encrypt: true, // TDK production server requires encryption
+    trustServerCertificate: true, // Trust self-signed certificates
     enableArithAbort: true,
   },
-  connectionTimeout: 10000, // 10 seconds (VPN-friendly)
-  requestTimeout: 15000,    // 15 seconds
+  connectionTimeout: parseInt(process.env.DB_CONNECTION_TIMEOUT || '30000'), // 30 seconds
+  requestTimeout: parseInt(process.env.DB_REQUEST_TIMEOUT || '30000'),    // 30 seconds
   pool: {
-    max: 10,
-    min: 0,
+    max: parseInt(process.env.DB_POOL_MAX || '10'),
+    min: parseInt(process.env.DB_POOL_MIN || '2'),
     idleTimeoutMillis: 30000,
   },
 };
