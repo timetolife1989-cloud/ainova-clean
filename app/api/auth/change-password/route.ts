@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Authentication required',
+          error: 'Hitelesítés szükséges',
         },
         { status: 401 }
       );
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Invalid JSON format',
+          error: 'Érvénytelen JSON formátum',
         },
         { status: 400 }
       );
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Current password, new password, and confirmation are required',
+          error: 'A jelenlegi jelszó, új jelszó és megerősítés megadása kötelező',
         },
         { status: 400 }
       );
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Invalid input format',
+          error: 'Érvénytelen beviteli formátum',
         },
         { status: 400 }
       );
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Passwords cannot be empty',
+          error: 'A jelszavak nem lehetnek üresek',
         },
         { status: 400 }
       );
@@ -93,18 +93,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Password too long',
+          error: 'A jelszó túl hosszú',
         },
         { status: 400 }
       );
     }
     
     // ✅ New password minimum length (security)
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return NextResponse.json(
         {
           success: false,
-          error: 'New password must be at least 6 characters',
+          error: 'Az új jelszónak legalább 8 karakter hosszúnak kell lennie',
+        },
+        { status: 400 }
+      );
+    }
+    
+    // ✅ Password complexity: uppercase
+    if (!/[A-Z]/.test(newPassword)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Az új jelszónak tartalmaznia kell legalább egy nagybetűt',
+        },
+        { status: 400 }
+      );
+    }
+    
+    // ✅ Password complexity: lowercase
+    if (!/[a-z]/.test(newPassword)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Az új jelszónak tartalmaznia kell legalább egy kisbetűt',
+        },
+        { status: 400 }
+      );
+    }
+    
+    // ✅ Password complexity: special character
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Az új jelszónak tartalmaznia kell legalább egy speciális karaktert (!@#$%...)',
         },
         { status: 400 }
       );
@@ -115,7 +148,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'New password and confirmation do not match',
+          error: 'Az új jelszó és a megerősítés nem egyezik',
         },
         { status: 400 }
       );
@@ -126,7 +159,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'New password must be different from current password',
+          error: 'Az új jelszó nem egyezhet a jelenlegivel',
         },
         { status: 400 }
       );
@@ -141,15 +174,15 @@ export async function POST(request: NextRequest) {
       .input('userId', parseInt(userId))
       .query(`
         SELECT PasswordHash, IsActive
-        FROM Users
-        WHERE UserID = @userId
+        FROM AinovaUsers
+        WHERE UserId = @userId
       `);
     
     if (userResult.recordset.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: 'User not found',
+          error: 'Felhasználó nem található',
         },
         { status: 404 }
       );
@@ -162,7 +195,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Account is disabled',
+          error: 'A fiók le van tiltva',
         },
         { status: 403 }
       );
@@ -197,7 +230,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Current password is incorrect',
+          error: 'A jelenlegi jelszó helytelen',
         },
         { status: 401 }
       );
@@ -212,12 +245,11 @@ export async function POST(request: NextRequest) {
       .input('userId', parseInt(userId))
       .input('passwordHash', newPasswordHash)
       .query(`
-        UPDATE Users
+        UPDATE AinovaUsers
         SET 
           PasswordHash = @passwordHash,
-          IsFirstLogin = 0,
-          UpdatedAt = GETDATE()
-        WHERE UserID = @userId
+          FirstLogin = 0
+        WHERE UserId = @userId
       `);
     
     // 9. ✅ AUDIT: Log successful password change
@@ -268,7 +300,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       success: true,
-      message: 'Password changed successfully',
+      message: 'Jelszó sikeresen módosítva!',
     });
     
   } catch (error) {
@@ -278,7 +310,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: 'An unexpected error occurred. Please try again.',
+        error: 'Váratlan hiba történt. Próbáld újra.',
       },
       { status: 500 }
     );

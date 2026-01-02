@@ -335,13 +335,55 @@ export async function login(
   } catch (error) {
     console.error('[Auth] Login error:', error);
     
-    // ✅ FIX: Differentiate error messages
+    // ✅ FIX: Differentiate error messages based on error type
     if (error instanceof Error) {
-      if (error.message.includes('Too many failed')) {
+      const errorMsg = error.message.toLowerCase();
+      
+      // Rate limit exceeded
+      if (errorMsg.includes('too many failed') || errorMsg.includes('túl sok sikertelen')) {
         return { success: false, error: error.message };
       }
-      if (error.message.includes('shutting down')) {
+      
+      // Application shutting down
+      if (errorMsg.includes('shutting down')) {
         return { success: false, error: 'A szolgáltatás átmenetileg nem elérhető' };
+      }
+      
+      // Network/connection errors - NOT on company network or no internet
+      if (errorMsg.includes('enotfound') || errorMsg.includes('getaddrinfo')) {
+        return { 
+          success: false, 
+          error: 'NETWORK_NOT_REACHABLE: Szerver nem elérhető. Ellenőrizd, hogy a céges hálózaton vagy (IvanTIM VPN).' 
+        };
+      }
+      
+      if (errorMsg.includes('etimedout') || errorMsg.includes('connection timeout') || errorMsg.includes('connectiontimeout')) {
+        return { 
+          success: false, 
+          error: 'CONNECTION_TIMEOUT: Kapcsolati időtúllépés. Ellenőrizd a hálózati kapcsolatot.' 
+        };
+      }
+      
+      if (errorMsg.includes('econnrefused') || errorMsg.includes('connection refused')) {
+        return { 
+          success: false, 
+          error: 'CONNECTION_REFUSED: A szerver elutasította a kapcsolatot. Lehet, hogy karbantartás alatt van.' 
+        };
+      }
+      
+      if (errorMsg.includes('esocket') || errorMsg.includes('socket')) {
+        return { 
+          success: false, 
+          error: 'SOCKET_ERROR: Hálózati hiba. Ellenőrizd az internetkapcsolatot és a VPN-t.' 
+        };
+      }
+      
+      // SQL Server specific errors
+      if (errorMsg.includes('login failed for user') || errorMsg.includes('cannot open database')) {
+        return { 
+          success: false, 
+          error: 'DATABASE_ERROR: Adatbázis hiba. Kérjük, értesítsd az IT supportot.' 
+        };
       }
     }
     

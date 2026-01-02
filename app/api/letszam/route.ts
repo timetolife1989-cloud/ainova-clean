@@ -60,30 +60,35 @@ export async function GET(request: NextRequest) {
       .input('muszak', sql.Char(1), muszak)
       .query(`
         SELECT 
-          id,
-          datum,
-          muszak,
-          pozicio,
-          pozicio_tipus,
-          is_kritikus,
-          megjelent,
-          tappenz,
-          szabadsag,
-          brutto_letszam,
-          netto_letszam,
-          hianyzas_fo,
-          hianyzas_percent,
-          leadasi_cel_perc,
-          indoklas_miert,
-          indoklas_meddig,
-          indoklas_terv,
-          rogzitette_user,
-          rogzitette_datum
-        FROM ainova_letszam
-        WHERE datum = @datum AND muszak = @muszak
+          l.id,
+          l.datum,
+          l.muszak,
+          l.pozicio,
+          l.pozicio_tipus,
+          l.is_kritikus,
+          l.megjelent,
+          l.tappenz,
+          l.szabadsag,
+          l.brutto_letszam,
+          l.netto_letszam,
+          l.hianyzas_fo,
+          l.hianyzas_percent,
+          l.leadasi_cel_perc,
+          l.indoklas_miert,
+          l.indoklas_meddig,
+          l.indoklas_terv,
+          l.rogzitette_user,
+          l.rogzitette_datum,
+          u.FullName AS rogzitette_fullname,
+          u.Role AS rogzitette_role,
+          u.Shift AS rogzitette_shift,
+          u.Email AS rogzitette_email
+        FROM ainova_letszam l
+        LEFT JOIN AinovaUsers u ON l.rogzitette_user = u.Username
+        WHERE l.datum = @datum AND l.muszak = @muszak
         ORDER BY 
-          CASE pozicio_tipus WHEN 'operativ' THEN 1 ELSE 2 END,
-          pozicio
+          CASE l.pozicio_tipus WHEN 'operativ' THEN 1 ELSE 2 END,
+          l.pozicio
       `);
 
       if (result.recordset.length === 0) {

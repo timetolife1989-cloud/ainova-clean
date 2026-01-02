@@ -33,6 +33,7 @@ body {
     #020617;
   filter: saturate(150%);
   pointer-events: none;
+  z-index: -1;
 }
 
 .star-field {
@@ -44,6 +45,8 @@ body {
     radial-gradient(1px 1px at 50% 10%, rgba(255, 255, 255, 0.2), transparent);
   opacity: 0.85;
   animation: starShift 40s linear infinite alternate;
+  pointer-events: none;
+  z-index: -1;
 }
 
 @keyframes starShift {
@@ -59,6 +62,7 @@ body {
   position: fixed;
   inset: -80px;
   pointer-events: none;
+  z-index: -1;
   background-image:
     radial-gradient(3px 3px at 10% 20%, rgba(255, 255, 255, 0.6), transparent),
     radial-gradient(2px 2px at 22% 65%, rgba(191, 219, 254, 0.7), transparent),
@@ -143,3 +147,26 @@ body {
   animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* Toast slide down animation */
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-100%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Login LED pulse animation */
+@keyframes ledPulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}

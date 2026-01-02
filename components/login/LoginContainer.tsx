@@ -71,12 +71,48 @@ export default function LoginContainer({ glowState, children }: LoginContainerPr
   };
 
   return (
-    <motion.div
-      animate={getAnimation()}
-      transition={getTransition()}
-      className="w-full max-w-md h-[500px] bg-gray-900/50 border border-gray-800 rounded-lg p-8 backdrop-blur-sm overflow-hidden"
-    >
-      {children}
-    </motion.div>
+    <div className="relative">
+      {/* Pulsating blue LED underglow */}
+      <div 
+        className="absolute -inset-1 rounded-2xl opacity-60 blur-xl animate-pulse"
+        style={{
+          background: 'radial-gradient(ellipse at center, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.3) 40%, transparent 70%)',
+          animation: 'ledPulse 3s ease-in-out infinite',
+        }}
+      />
+      
+      {/* 3D Glass container */}
+      <motion.div
+        animate={getAnimation()}
+        transition={getTransition()}
+        className="relative w-full max-w-md min-h-[500px] rounded-2xl p-8 overflow-hidden"
+        style={{
+          background: 'linear-gradient(145deg, rgba(15, 15, 20, 0.95) 0%, rgba(10, 10, 15, 0.98) 50%, rgba(5, 5, 10, 0.99) 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: `
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+            inset 0 -1px 0 0 rgba(0, 0, 0, 0.3),
+            0 25px 50px -12px rgba(0, 0, 0, 0.8),
+            0 0 0 1px rgba(0, 0, 0, 0.5)
+          `,
+          backdropFilter: 'blur(20px)',
+          transform: 'perspective(1000px) rotateX(2deg)',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {/* Inner shine effect */}
+        <div 
+          className="absolute inset-0 rounded-2xl pointer-events-none"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 40%)',
+          }}
+        />
+        
+        {/* Content */}
+        <div className="relative z-10">
+          {children}
+        </div>
+      </motion.div>
+    </div>
   );
 }

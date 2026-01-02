@@ -66,24 +66,60 @@ export default function LoginPage() {
         
         const backendError = data.error || data.message || 'Login failed';
         
-        // ✅ Substring matching function
+        // ✅ Improved error message mapping with specific network errors
         const getErrorMessage = (error: string): string => {
           const lowerError = error.toLowerCase();
           
+          // Specific network/VPN errors (most important for user)
+          if (error.includes('NETWORK_NOT_REACHABLE') || lowerError.includes('enotfound') || lowerError.includes('getaddrinfo')) {
+            return '🌐 Szerver nem elérhető. Ellenőrizd, hogy a céges hálózaton vagy (IvanTIM VPN).';
+          }
+          if (error.includes('CONNECTION_TIMEOUT') || lowerError.includes('etimedout') || lowerError.includes('timeout')) {
+            return '⏱️ Kapcsolati időtúllépés. Ellenőrizd a hálózati kapcsolatot.';
+          }
+          if (error.includes('CONNECTION_REFUSED') || lowerError.includes('econnrefused')) {
+            return '🚫 A szerver elutasította a kapcsolatot. Lehet, hogy karbantartás alatt van.';
+          }
+          if (error.includes('SOCKET_ERROR') || lowerError.includes('esocket')) {
+            return '🔌 Hálózati hiba. Ellenőrizd az internetkapcsolatot és a VPN-t.';
+          }
+          if (error.includes('DATABASE_ERROR')) {
+            return '🗄️ Adatbázis hiba. Kérjük, értesítsd az IT supportot.';
+          }
+          
+          // General database/SQL errors
           if (lowerError.includes('sql') || lowerError.includes('database') || lowerError.includes('connection')) {
-            return 'Adatbázis kapcsolati hiba. Próbáld újra később.';
+            return '🗄️ Adatbázis kapcsolati hiba. Próbáld újra később.';
           }
-          if (lowerError.includes('invalid') || lowerError.includes('credentials')) {
-            return 'Hibás felhasználónév vagy jelszó';
+          
+          // Invalid credentials
+          if (lowerError.includes('invalid') || lowerError.includes('credentials') || lowerError.includes('hibás')) {
+            return '❌ Hibás felhasználónév vagy jelszó';
           }
-          if (lowerError.includes('network') || lowerError.includes('fetch') || lowerError.includes('enotfound')) {
-            return 'Hálózati hiba. Ellenőrizd az internetkapcsolatot.';
+          
+          // User not found (same message as invalid for security)
+          if (lowerError.includes('user not found') || lowerError.includes('nincs ilyen')) {
+            return '❌ Hibás felhasználónév vagy jelszó';
           }
-          if (lowerError.includes('disabled') || lowerError.includes('banned')) {
-            return 'A fiók le van tiltva. Lépj kapcsolatba az adminisztrátorral.';
+          
+          // Network fetch errors (browser side)
+          if (lowerError.includes('network') || lowerError.includes('fetch') || lowerError.includes('failed to fetch')) {
+            return '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton.';
           }
-          if (lowerError.includes('expired')) {
-            return 'A munkamenet lejárt. Jelentkezz be újra.';
+          
+          // Account disabled
+          if (lowerError.includes('disabled') || lowerError.includes('banned') || lowerError.includes('tiltva')) {
+            return '🔒 A fiók le van tiltva. Lépj kapcsolatba az adminisztrátorral.';
+          }
+          
+          // Session expired
+          if (lowerError.includes('expired') || lowerError.includes('lejárt')) {
+            return '⏰ A munkamenet lejárt. Jelentkezz be újra.';
+          }
+          
+          // Rate limiting
+          if (lowerError.includes('too many') || lowerError.includes('túl sok')) {
+            return '🚦 Túl sok sikertelen kísérlet. Várj 15 percet.';
           }
           
           return errorMessages[error] || error || 'Ismeretlen hiba történt';
@@ -117,9 +153,21 @@ export default function LoginPage() {
 
     } catch (error) {
       setGlowState('error');
-      const errorMsg = error instanceof Error 
-        ? error.message 
-        : 'Hálózati hiba. Ellenőrizd az internetkapcsolatot.';
+      
+      // Client-side network errors (fetch failed)
+      let errorMsg = '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
+      
+      if (error instanceof Error) {
+        const msg = error.message.toLowerCase();
+        if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
+          errorMsg = '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
+        } else if (msg.includes('timeout')) {
+          errorMsg = '⏱️ Kapcsolati időtúllépés. Lassú az internet vagy nincs VPN kapcsolat.';
+        } else {
+          errorMsg = `Hálózati hiba: ${error.message}`;
+        }
+      }
+      
       showToast(errorMsg, 'error');
       setTimeout(() => setGlowState('idle'), 500);
     } finally {
