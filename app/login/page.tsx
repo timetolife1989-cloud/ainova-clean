@@ -5,7 +5,6 @@ import LoginContainer from '@/components/login/LoginContainer';
 import AinovaLogo from '@/components/login/AinovaLogo';
 import InputField from '@/components/login/InputField';
 import RippleButton from '@/components/login/RippleButton';
-import ToastNotification from '@/components/login/ToastNotification';
 import InteractiveBackground from '@/components/login/InteractiveBackground';
 
 // Error message mapping (magyar)
@@ -27,14 +26,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [glowState, setGlowState] = useState<'idle' | 'success' | 'error'>('idle');
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const showToast = (message: string, type: typeof toastType) => {
-    setToastMessage(message);
-    setToastType(type);
-    setToastVisible(true);
+  const showError = (message: string) => {
+    setErrorMessage(message);
+    setGlowState('error');
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+      setGlowState('idle');
+      setErrorMessage('');
+    }, 5000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,9 +43,7 @@ export default function LoginPage() {
 
     // Validation
     if (!username || !password) {
-      setGlowState('error');
-      showToast('Hiányzó felhasználónév vagy jelszó', 'error');
-      setTimeout(() => setGlowState('idle'), 500);
+      showError('Hiányzó felhasználónév vagy jelszó');
       return;
     }
 
@@ -72,54 +71,54 @@ export default function LoginPage() {
           
           // Specific network/VPN errors (most important for user)
           if (error.includes('NETWORK_NOT_REACHABLE') || lowerError.includes('enotfound') || lowerError.includes('getaddrinfo')) {
-            return '🌐 Szerver nem elérhető. Ellenőrizd, hogy a céges hálózaton vagy (IvanTIM VPN).';
+            return 'Szerver nem elérhető. Ellenőrizd, hogy a céges hálózaton vagy (IvanTIM VPN).';
           }
           if (error.includes('CONNECTION_TIMEOUT') || lowerError.includes('etimedout') || lowerError.includes('timeout')) {
-            return '⏱️ Kapcsolati időtúllépés. Ellenőrizd a hálózati kapcsolatot.';
+            return 'Kapcsolati időtúllépés. Ellenőrizd a hálózati kapcsolatot.';
           }
           if (error.includes('CONNECTION_REFUSED') || lowerError.includes('econnrefused')) {
-            return '🚫 A szerver elutasította a kapcsolatot. Lehet, hogy karbantartás alatt van.';
+            return 'A szerver elutasította a kapcsolatot. Lehet, hogy karbantartás alatt van.';
           }
           if (error.includes('SOCKET_ERROR') || lowerError.includes('esocket')) {
-            return '🔌 Hálózati hiba. Ellenőrizd az internetkapcsolatot és a VPN-t.';
+            return 'Hálózati hiba. Ellenőrizd az internetkapcsolatot és a VPN-t.';
           }
           if (error.includes('DATABASE_ERROR')) {
-            return '🗄️ Adatbázis hiba. Kérjük, értesítsd az IT supportot.';
+            return 'Adatbázis hiba. Kérjük, értesítsd az IT supportot.';
           }
           
           // General database/SQL errors
           if (lowerError.includes('sql') || lowerError.includes('database') || lowerError.includes('connection')) {
-            return '🗄️ Adatbázis kapcsolati hiba. Próbáld újra később.';
+            return 'Adatbázis kapcsolati hiba. Próbáld újra később.';
           }
           
           // Invalid credentials
           if (lowerError.includes('invalid') || lowerError.includes('credentials') || lowerError.includes('hibás')) {
-            return '❌ Hibás felhasználónév vagy jelszó';
+            return 'Hibás felhasználónév vagy jelszó';
           }
           
           // User not found (same message as invalid for security)
           if (lowerError.includes('user not found') || lowerError.includes('nincs ilyen')) {
-            return '❌ Hibás felhasználónév vagy jelszó';
+            return 'Hibás felhasználónév vagy jelszó';
           }
           
           // Network fetch errors (browser side)
           if (lowerError.includes('network') || lowerError.includes('fetch') || lowerError.includes('failed to fetch')) {
-            return '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton.';
+            return 'Nincs internetkapcsolat, vagy nem vagy a céges hálózaton.';
           }
           
           // Account disabled
           if (lowerError.includes('disabled') || lowerError.includes('banned') || lowerError.includes('tiltva')) {
-            return '🔒 A fiók le van tiltva. Lépj kapcsolatba az adminisztrátorral.';
+            return 'A fiók le van tiltva. Lépj kapcsolatba az adminisztrátorral.';
           }
           
           // Session expired
           if (lowerError.includes('expired') || lowerError.includes('lejárt')) {
-            return '⏰ A munkamenet lejárt. Jelentkezz be újra.';
+            return 'A munkamenet lejárt. Jelentkezz be újra.';
           }
           
           // Rate limiting
           if (lowerError.includes('too many') || lowerError.includes('túl sok')) {
-            return '🚦 Túl sok sikertelen kísérlet. Várj 15 percet.';
+            return 'Túl sok sikertelen kísérlet. Várj 15 percet.';
           }
           
           return errorMessages[error] || error || 'Ismeretlen hiba történt';
@@ -127,17 +126,13 @@ export default function LoginPage() {
         
         const displayError = getErrorMessage(backendError);
         
-        console.log('Backend error:', backendError); // DEBUG
-        console.log('Display error:', displayError); // DEBUG
-        
-        showToast(displayError, 'error');
-        setTimeout(() => setGlowState('idle'), 500);
+        showError(displayError);
         return;
       }
 
       // Success állapot
       setGlowState('success');
-      showToast('Sikeres belépés!', 'success');
+      setErrorMessage(''); // Clear any error
 
       // User info mentése sessionStorage-ba
       if (data.user) {
@@ -152,24 +147,21 @@ export default function LoginPage() {
       }, 800);
 
     } catch (error) {
-      setGlowState('error');
-      
       // Client-side network errors (fetch failed)
-      let errorMsg = '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
+      let errorMsg = 'Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
       
       if (error instanceof Error) {
         const msg = error.message.toLowerCase();
         if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
-          errorMsg = '🌐 Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
+          errorMsg = 'Nincs internetkapcsolat, vagy nem vagy a céges hálózaton (IvanTIM VPN).';
         } else if (msg.includes('timeout')) {
-          errorMsg = '⏱️ Kapcsolati időtúllépés. Lassú az internet vagy nincs VPN kapcsolat.';
+          errorMsg = 'Kapcsolati időtúllépés. Lassú az internet vagy nincs VPN kapcsolat.';
         } else {
           errorMsg = `Hálózati hiba: ${error.message}`;
         }
       }
       
-      showToast(errorMsg, 'error');
-      setTimeout(() => setGlowState('idle'), 500);
+      showError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -182,7 +174,7 @@ export default function LoginPage() {
 
       {/* Login form */}
       <main className="relative z-10 min-h-screen flex items-center justify-center px-4 py-10">
-        <LoginContainer glowState={glowState}>
+        <LoginContainer glowState={glowState} errorMessage={errorMessage}>
           <AinovaLogo />
 
           <form onSubmit={handleSubmit}>
@@ -208,14 +200,6 @@ export default function LoginPage() {
           </form>
         </LoginContainer>
       </main>
-
-      {/* Toast notification */}
-      <ToastNotification
-        message={toastMessage}
-        type={toastType}
-        visible={toastVisible}
-        onHide={() => setToastVisible(false)}
-      />
     </>
   );
 }
