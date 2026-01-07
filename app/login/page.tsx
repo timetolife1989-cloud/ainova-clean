@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoginContainer from '@/components/login/LoginContainer';
 import AinovaLogo from '@/components/login/AinovaLogo';
@@ -19,6 +19,21 @@ const errorMessages: Record<string, string> = {
   'Login failed': 'Bejelentkezés sikertelen. Ellenőrizd az adatokat.',
 };
 
+// =====================================================
+// Háttérben futó import check - amíg a user gépel
+// =====================================================
+async function backgroundImportCheck(): Promise<{ needsImport: boolean; canStartImport: boolean }> {
+  try {
+    const res = await fetch('/api/teljesitmeny/check');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.log('[Login] Background check failed:', e);
+  }
+  return { needsImport: false, canStartImport: false };
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,6 +42,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [glowState, setGlowState] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  
+  // Import check state - háttérben fut
+  const importCheckRef = useRef<{ needsImport: boolean; canStartImport: boolean } | null>(null);
+  const importCheckDone = useRef(false);
+
+  // =====================================================
+  // Háttérben elindul az import check amint betöltődik az oldal
+  // =====================================================
+  useEffect(() => {
+    if (!importCheckDone.current) {
+      importCheckDone.current = true;
+      backgroundImportCheck().then(result => {
+        importCheckRef.current = result;
+        console.log('[Login] Background check result:', result);
+      });
+    }
+  }, []);
 
   const showError = (message: string) => {
     setErrorMessage(message);
@@ -137,6 +169,19 @@ export default function LoginPage() {
       // User info mentése sessionStorage-ba
       if (data.user) {
         sessionStorage.setItem('user', JSON.stringify(data.user));
+      }
+
+      // =====================================================
+      // Import indítása ha szükséges (nem blokkoló)
+      // =====================================================
+      const checkResult = importCheckRef.current;
+      if (checkResult?.needsImport && checkResult?.canStartImport) {
+        console.log('[Login] Starting background import...');
+        // Fire and forget - nem várjuk meg
+        fetch('/api/teljesitmeny/import', { method: 'POST' })
+          .then(res => res.json())
+          .then(result => console.log('[Login] Import result:', result))
+          .catch(err => console.log('[Login] Import error:', err));
       }
 
       // Redirect

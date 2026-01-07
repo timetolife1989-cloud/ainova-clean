@@ -1,5 +1,6 @@
 'use client';
 import { useRef, KeyboardEvent } from 'react';
+import AinovaLoader from '@/components/ui/AinovaLoader';
 import type { LetszamRow } from './types';
 
 interface LetszamTableProps {
@@ -143,8 +144,10 @@ export default function LetszamTable({
               })
             ) : (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                  ⏳ Adatok betöltése...
+                <td colSpan={5} className="px-4 py-8">
+                  <div className="flex justify-center">
+                    <AinovaLoader size="sm" />
+                  </div>
                 </td>
               </tr>
             )}

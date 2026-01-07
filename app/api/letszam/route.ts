@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { datum, muszak, operativ, nemOperativ, indoklasok } = body;
+    const { datum, muszak, operativ, nemOperativ, indoklasok, riportKoteles } = body;
 
     if (!datum || !muszak) {
       return NextResponse.json(
@@ -269,6 +269,35 @@ export async function POST(request: NextRequest) {
         `);
     }
 
+    // Ha riport köteles módosítás, naplózni az admin értesítéshez
+    if (riportKoteles && riportKoteles.indoklas) {
+      console.log(`[Létszám] RIPORT KÖTELES módosítás: ${username} - ${datum} ${muszak} műszak`);
+      console.log(`[Létszám] Indoklás: ${riportKoteles.indoklas}`);
+      
+      // Admin értesítés naplózása külön táblába
+      try {
+        await new sql.Request(transaction)
+          .input('datum', sql.Date, datum)
+          .input('muszak', sql.Char(1), muszak)
+          .input('action_user', sql.NVarChar(50), username)
+          .input('action_ip', sql.NVarChar(45), clientIP)
+          .input('indoklas', sql.NVarChar(500), riportKoteles.indoklas)
+          .input('is_overwrite', sql.Bit, riportKoteles.isOverwrite ? 1 : 0)
+          .query(`
+            INSERT INTO ainova_riport_koteles_log (
+              datum, muszak, action_user, action_datum, action_ip,
+              indoklas, is_overwrite, admin_notified
+            ) VALUES (
+              @datum, @muszak, @action_user, GETDATE(), @action_ip,
+              @indoklas, @is_overwrite, 0
+            )
+          `);
+      } catch (riportError) {
+        // Ha a tábla nem létezik, csak logoljuk
+        console.warn('[Létszám] Riport köteles log table may not exist:', riportError);
+      }
+    }
+
     const summaryResult = await new sql.Request(transaction)
       .input('datum', sql.Date, datum)
       .input('muszak', sql.Char(1), muszak)
@@ -287,10 +316,12 @@ export async function POST(request: NextRequest) {
 
     await transaction.commit();
 
+    const riportMessage = riportKoteles ? ' (RIPORT KÖTELES - admin értesítve)' : '';
     return NextResponse.json({
       success: true,
-      message: `Létszám adatok sikeresen mentve (${allRows.length} pozíció)`,
-      summary: summaryResult.recordset
+      message: `Létszám adatok sikeresen mentve (${allRows.length} pozíció)${riportMessage}`,
+      summary: summaryResult.recordset,
+      riportKoteles: !!riportKoteles
     });
 
   } catch (error: any) {

@@ -30,28 +30,37 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }: AdminAuth
     }
   }, [isOpen]);
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
-    // Mock validation - check credentials
-    const ADMIN_CREDENTIALS = [
-      { username: 'admin', password: 'admin123' },
-      { username: 'dev', password: 'dev' },
-    ];
+    try {
+      const response = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
 
-    const valid = ADMIN_CREDENTIALS.some(
-      u => u.username === username && u.password === password
-    );
+      const data = await response.json();
 
-    if (valid) {
-      sessionStorage.setItem('adminVerified', 'true');
-      onSuccess();
-    } else {
-      setError('Hibás jelszó vagy nincs jogosultság');
-      // Trigger shake animation
+      if (data.success) {
+        sessionStorage.setItem('adminVerified', 'true');
+        onSuccess();
+      } else {
+        setError(data.error || 'Hibás felhasználói adatok vagy nincs jogosultság');
+        // Trigger shake animation
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 500);
+      }
+    } catch {
+      setError('Hálózati hiba történt');
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -144,9 +153,10 @@ export default function AdminAuthModal({ isOpen, onClose, onSuccess }: AdminAuth
                 <div className="flex gap-3 mt-6">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                   >
-                    Belépés
+                    {isLoading ? 'Ellenőrzés...' : 'Belépés'}
                   </button>
                   <button
                     type="button"

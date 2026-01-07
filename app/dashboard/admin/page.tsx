@@ -38,8 +38,8 @@ export default function AdminPage() {
             <AdminMenuCard
               icon="👤"
               title="FELHASZNÁLÓK"
-              description="Felhasználó felvétele, módosítás, törlés"
-              href="/dashboard/admin/users/new"
+              description="Felhasználók kezelése, szűrés, szerkesztés"
+              href="/dashboard/admin/users"
               locked={false}
             />
             

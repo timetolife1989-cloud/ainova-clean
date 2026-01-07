@@ -42,18 +42,24 @@ export default function DashboardPage() {
           
           <MenuTile
             icon="📊"
-            title="TELJESÍTMÉNY ADATOK"
-            description="Teljesítmény adatok rögzítése"
+            title="OP. TELJESÍTMÉNY"
+            description="Operátori teljesítmény adatok"
             href="/dashboard/teljesitmeny"
-            onClick={() => showMaintenance('TELJESÍTMÉNY ADATOK')}
           />
           
           <MenuTile
-            icon="⚙️"
-            title="GÉPADAT RÖGZÍTÉS"
-            description="Gépek állapota és paraméterei"
-            href="/dashboard/gepadat"
-            onClick={() => showMaintenance('GÉPADAT RÖGZÍTÉS')}
+            icon="📈"
+            title="NAPI PERCES"
+            description="Lehívás vs Leadás kimutatás"
+            href="/dashboard/napi-perces"
+          />
+          
+          {/* Kimutatás Adatok Tile (analytics) */}
+          <MenuTile
+            icon="📈"
+            title="KIMUTATÁS ADATOK"
+            description="Létszám és leadás statisztikák"
+            href="/dashboard/kimutatas"
           />
           
           {/* Admin Panel Tile (purple variant) - Active */}

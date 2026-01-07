@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/dashboard';
+import RiportKotelesModal from '@/components/letszam/RiportKotelesModal';
 
 // Pozíciók definíciója (a régi működő verzióból)
 const POSITIONS = [
@@ -92,6 +93,11 @@ export default function LetszamPage() {
     shift: string;
     email: string;
   } | null>(null);
+
+  // Riport köteles modal (1 napnál régebbi módosítás)
+  const [showRiportKoteles, setShowRiportKoteles] = useState(false);
+  const [riportKotelesMode, setRiportKotelesMode] = useState<'new' | 'overwrite'>('new');
+  const [pendingIndoklas, setPendingIndoklas] = useState<string>('');
 
   // Input handlers
   const handleFocus = (positionId: string, field: 'present' | 'vacation' | 'sickLeave') => {
@@ -192,8 +198,9 @@ export default function LetszamPage() {
   };
 
   // Tényleges mentés végrehajtása
-  const performSave = async () => {
+  const performSave = async (riportIndoklas?: string) => {
     setShowOverwriteConfirm(false);
+    setShowRiportKoteles(false);
     setIsSaving(true);
     
     try {
@@ -220,6 +227,11 @@ export default function LetszamPage() {
           operativ,
           nemOperativ,
           indoklasok: {},
+          // Riport köteles módosítás adatai
+          riportKoteles: riportIndoklas ? {
+            indoklas: riportIndoklas,
+            isOverwrite: riportKotelesMode === 'overwrite',
+          } : undefined,
         }),
       });
 
@@ -229,6 +241,7 @@ export default function LetszamPage() {
         throw new Error(result.error || result.details || 'Mentés sikertelen');
       }
 
+      setPendingIndoklas('');
       setShowSuccess(true);
       setTimeout(() => {
         router.push('/dashboard');
@@ -242,7 +255,13 @@ export default function LetszamPage() {
     }
   };
 
-  // Mentés gomb handler - ellenőrzi duplikátumot
+  // Ellenőrzi hogy riport köteles-e (1 napnál régebbi)
+  const isRiportKoteles = (): boolean => {
+    const daysDiff = getDaysDifference();
+    return daysDiff < -1; // -2 vagy régebbi = riport köteles
+  };
+
+  // Mentés gomb handler - ellenőrzi duplikátumot és riport kötelest
   const handleSave = async () => {
     const totalEntered = sumTotal.present + sumTotal.vacation + sumTotal.sickLeave;
     
@@ -261,6 +280,23 @@ export default function LetszamPage() {
     setIsChecking(true);
     try {
       const existing = await checkExistingData();
+      
+      // Ha riport köteles (1 napnál régebbi)
+      if (isRiportKoteles()) {
+        setExistingRecord(existing.exists ? { 
+          savedBy: existing.savedBy, 
+          savedAt: existing.savedAt,
+          fullName: existing.fullName,
+          role: existing.role,
+          shift: existing.shift,
+          email: existing.email
+        } : null);
+        setRiportKotelesMode(existing.exists ? 'overwrite' : 'new');
+        setShowRiportKoteles(true);
+        return;
+      }
+      
+      // Nem riport köteles - normál flow
       if (existing.exists) {
         setExistingRecord({ 
           savedBy: existing.savedBy, 
@@ -273,10 +309,18 @@ export default function LetszamPage() {
         setShowOverwriteConfirm(true);
         return;
       }
+      
+      // Nincs létező adat, nem riport köteles - egyszerű mentés
       await performSave();
     } finally {
       setIsChecking(false);
     }
+  };
+
+  // Riport köteles indoklás beküldése
+  const handleRiportKotelesConfirm = (indoklas: string) => {
+    setPendingIndoklas(indoklas);
+    performSave(indoklas);
   };
 
   const currentShift = SHIFTS.find((s) => s.id === selectedShift);
@@ -718,7 +762,7 @@ export default function LetszamPage() {
               </button>
               <button
                 type="button"
-                onClick={performSave}
+                onClick={() => performSave()}
                 className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors"
               >
                 Igen, felülírom
@@ -727,6 +771,26 @@ export default function LetszamPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Riport köteles módosítás */}
+      <RiportKotelesModal
+        isOpen={showRiportKoteles}
+        onClose={() => setShowRiportKoteles(false)}
+        onConfirm={handleRiportKotelesConfirm}
+        isOverwrite={riportKotelesMode === 'overwrite'}
+        existingRecord={existingRecord ? {
+          fullName: existingRecord.fullName,
+          savedAt: existingRecord.savedAt,
+          role: existingRecord.role,
+          email: existingRecord.email,
+        } : undefined}
+        targetDate={recordDate.toLocaleDateString('hu-HU', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          weekday: 'long',
+        })}
+      />
     </>
   );
 }

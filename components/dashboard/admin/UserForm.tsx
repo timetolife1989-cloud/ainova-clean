@@ -7,17 +7,29 @@ interface UserFormProps {
 }
 
 export interface UserFormData {
-  username: string;
-  name: string;
+  username: string;       // Törzsszám
+  name: string;           // Teljes név
   password: string;
-  role: 'Admin' | 'Műszakvezető' | 'Operátor';
+  role: 'Admin' | 'Manager' | 'Műszakvezető' | 'Műszakvezető helyettes' | 'NPI Technikus' | 'Operátor';
+  shift: 'A' | 'B' | 'C' | null;  // Műszak
   email?: string;
 }
 
+const SHIFTS = [
+  { value: 'A', label: 'A műszak', color: 'bg-blue-600' },
+  { value: 'B', label: 'B műszak', color: 'bg-green-600' },
+  { value: 'C', label: 'C műszak', color: 'bg-orange-600' },
+  { value: null, label: 'Nincs műszakbeosztás', color: 'bg-gray-600' },
+];
+
+// Pozíciók (SQL constraint-nek megfelelően)
 const ROLES = [
-  { value: 'Admin' as const, label: 'Admin', color: 'bg-purple-600' },
-  { value: 'Műszakvezető' as const, label: 'Műszakvezető', color: 'bg-blue-600' },
-  { value: 'Operátor' as const, label: 'Operátor', color: 'bg-green-600' },
+  { value: 'Admin', label: 'Admin', color: 'bg-purple-600' },
+  { value: 'Manager', label: 'Manager', color: 'bg-indigo-600' },
+  { value: 'Műszakvezető', label: 'Műszakvezető', color: 'bg-blue-600' },
+  { value: 'Műszakvezető helyettes', label: 'Műszakvezető helyettes', color: 'bg-cyan-600' },
+  { value: 'NPI Technikus', label: 'NPI Technikus', color: 'bg-orange-600' },
+  { value: 'Operátor', label: 'Operátor', color: 'bg-green-600' },
 ];
 
 export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
@@ -26,6 +38,7 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
     name: '',
     password: '',
     role: 'Operátor',
+    shift: null,
     email: '',
   });
 
@@ -39,7 +52,7 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
   const validateField = (name: string, value: string): string => {
     switch (name) {
       case 'username':
-        if (!value) return 'Felhasználónév kötelező';
+        if (!value) return 'Törzsszám kötelező';
         if (value.length < 3) return 'Minimum 3 karakter szükséges';
         return '';
       case 'name':
@@ -52,6 +65,9 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
       case 'passwordConfirm':
         if (!value) return 'Jelszó megerősítés kötelező';
         if (value !== formData.password) return 'A jelszavak nem egyeznek';
+        return '';
+      case 'role':
+        if (!value) return 'Pozíció kötelező';
         return '';
       case 'email':
         if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
@@ -125,10 +141,10 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Username */}
+      {/* Törzsszám */}
       <div>
         <label className="block text-sm text-gray-300 font-medium mb-2">
-          Felhasználónév *
+          Törzsszám *
         </label>
         <input
           type="text"
@@ -136,7 +152,7 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
           onChange={(e) => handleChange('username', e.target.value)}
           onBlur={(e) => handleBlur('username', e.target.value)}
           className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
-          placeholder="pl. jkovacs"
+          placeholder="pl. 30008047"
         />
         {errors.username && (
           <p className="text-red-400 text-xs mt-1">{errors.username}</p>
@@ -215,10 +231,10 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
         )}
       </div>
 
-      {/* Role */}
+      {/* Pozíció */}
       <div>
         <label className="block text-sm text-gray-300 font-medium mb-2">
-          Szerepkör *
+          Pozíció *
         </label>
         <select
           value={formData.role}
@@ -231,6 +247,29 @@ export default function UserForm({ onSubmit, onCancel }: UserFormProps) {
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Shift */}
+      <div>
+        <label className="block text-sm text-gray-300 font-medium mb-2">
+          Műszak
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {SHIFTS.map(shift => (
+            <button
+              key={shift.value ?? 'none'}
+              type="button"
+              onClick={() => setFormData(prev => ({ ...prev, shift: shift.value as 'A' | 'B' | 'C' | null }))}
+              className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                formData.shift === shift.value
+                  ? `${shift.color} text-white ring-2 ring-white/30`
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+              }`}
+            >
+              {shift.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Email (optional) */}
