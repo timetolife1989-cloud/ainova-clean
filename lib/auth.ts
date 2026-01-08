@@ -6,7 +6,7 @@
 // PRODUCTION-READY: Feature flags, fail-safe, error handling, caching
 // =====================================================================
 
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { getPool, sql } from './db';
 

@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏭 AINOVA - Termelésirányítási Rendszer
 
-## Getting Started
+> TDK Hungary termelési dashboard Next.js 16 alapokon
 
-First, run the development server:
+## ⚡ Gyors Indítás
 
-```bash
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Nyisd meg: http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📚 Dokumentáció
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Dokumentum | Leírás |
+|------------|--------|
+| [docs/SETUP.md](docs/SETUP.md) | Telepítési útmutató |
+| [docs/MODULES.md](docs/MODULES.md) | Modul dokumentáció |
+| [docs/TODO.md](docs/TODO.md) | Fejlesztési feladatok |
+| [docs/MILESTONES.md](docs/MILESTONES.md) | Verzió roadmap |
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Backend:** Next.js API Routes, SQL Server (mssql)
+- **Vizualizáció:** Recharts, Framer Motion
+- **Auth:** bcrypt, HTTP-only cookies, session cache
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📦 NPM Scriptek
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```powershell
+npm run dev       # Fejlesztői szerver
+npm run build     # Produkciós build
+npm run db:test   # Adatbázis teszt
+npm run lint      # ESLint
+```
 
-## Deploy on Vercel
+## 🔐 Alapértelmezett Bejelentkezés
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| User | Jelszó | Szerep |
+|------|--------|--------|
+| dev | dev | Admin |
+| admin | admin123 | Admin |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📂 Projekt Struktúra
+
+```
+ainova-clean/
+├── app/              # Next.js App Router
+│   ├── api/          # API végpontok
+│   └── dashboard/    # Dashboard oldalak
+├── components/       # React komponensek
+├── lib/              # Shared utilities
+├── scripts/          # SQL és utility scriptek
+└── docs/             # Dokumentáció
+```
+
+## 🏗️ Modulok
+
+- **Letszám** - Műszak és pozíció kezelés
+- **Teljesítmény** - Termelési riportok
+- **Napi Perces** - Részletes termelési adatok
+- **Kimutatás** - Összesítő grafikonok
+- **Admin** - Felhasználó kezelés
+
+---
+
+*© 2025 TDK Hungary - AINOVA Project*

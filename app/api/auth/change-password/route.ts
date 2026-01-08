@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 
 /**
  * POST /api/auth/change-password
