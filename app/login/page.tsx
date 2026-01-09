@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import LoginContainer from '@/components/login/LoginContainer';
 import AinovaLogo from '@/components/login/AinovaLogo';
@@ -34,7 +34,25 @@ async function backgroundImportCheck(): Promise<{ needsImport: boolean; canStart
   return { needsImport: false, canStartImport: false };
 }
 
+// Wrapper komponens a Suspense boundary-hez
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+// Loading fallback
+function LoginFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+      <div className="animate-pulse text-slate-400">Betöltés...</div>
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState('');

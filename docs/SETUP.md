@@ -49,14 +49,22 @@ Nyisd meg: http://localhost:3000/login
 
 ---
 
-## 🔐 Bejelentkezési Adatok
+## 🔐 Felhasználókezelés
 
-| Felhasználó | Jelszó | Szerepkör |
-|-------------|--------|-----------|
-| `dev` | `dev` | Admin |
-| `admin` | `admin123` | Admin |
+A felhasználók a `dbo.AinovaUsers` táblában vannak tárolva.
 
-⚠️ **Produkciós környezetben ezeket cseréld le bcrypt hashelt jelszavakra!**
+**Új felhasználó létrehozása:**
+1. Bejelentkezés admin jogosultsággal
+2. Dashboard → Admin → Felhasználók
+3. "Új felhasználó" gomb
+
+**Szerepkörök:**
+- `Admin` - Teljes hozzáférés, user kezelés
+- `Manager` - Vezetői funkciók
+- `Műszakvezető` - Műszak adatok kezelése
+- `Operátor` - Alap hozzáférés
+
+⚠️ **Jelszavak bcrypt hashelt formában tárolódnak a `PasswordHash` mezőben.**
 
 ---
 
@@ -68,7 +76,7 @@ Nyisd meg: http://localhost:3000/login
 |------|-------|--------|
 | UserId | INT | Elsődleges kulcs (auto-increment) |
 | Username | NVARCHAR(50) | Egyedi felhasználónév |
-| PasswordHash | NVARCHAR(255) | bcrypt hash vagy plain text (dev) |
+| PasswordHash | NVARCHAR(255) | bcrypt hash (KÖTELEZŐ) |
 | FullName | NVARCHAR(100) | Teljes név |
 | Role | NVARCHAR(50) | Admin, Műszakvezető, Operátor |
 | Email | NVARCHAR(100) | Email cím (opcionális) |

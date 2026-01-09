@@ -100,10 +100,11 @@ export async function proxy(request: NextRequest) {
     const requestHeaders = new Headers(request.headers);
     
     // ✅ Safely set headers only if data exists
+    // Note: HTTP headers only support ASCII, so we encode Unicode characters
     if (data.userId) requestHeaders.set('x-user-id', data.userId.toString());
-    if (data.username) requestHeaders.set('x-username', data.username);
-    if (data.role) requestHeaders.set('x-user-role', data.role);
-    if (data.fullName) requestHeaders.set('x-user-fullname', data.fullName);
+    if (data.username) requestHeaders.set('x-username', encodeURIComponent(data.username));
+    if (data.role) requestHeaders.set('x-user-role', encodeURIComponent(data.role));
+    if (data.fullName) requestHeaders.set('x-user-fullname', encodeURIComponent(data.fullName));
     
     console.log(`[Proxy] Session valid: ${pathname}, user=${data.username || 'unknown'}`);
     
@@ -137,8 +138,7 @@ export async function proxy(request: NextRequest) {
   }
 }
 
-// ✅ NEXT.JS 16 COMPATIBILITY: Export as both "proxy" (new) and "middleware" (legacy)
-export { proxy as middleware };
+// ✅ NEXT.JS 16: proxy.ts file with "proxy" function is the new standard
 
 /**
  * Proxy configuration

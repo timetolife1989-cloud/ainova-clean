@@ -10,7 +10,7 @@ import { POSITIONS, SHIFTS } from '@/lib/constants';
 // =====================================================
 // Típusok
 // =====================================================
-type SortField = 'username' | 'fullName' | 'role' | 'createdAt' | 'lastLoginAt';
+type SortField = 'username' | 'fullName' | 'role' | 'createdAt';
 type SortOrder = 'asc' | 'desc';
 
 // =====================================================
@@ -369,12 +369,6 @@ export default function UsersListPage() {
                       </th>
                       <th className="px-4 py-3">Műszak</th>
                       <th className="px-4 py-3">Státusz</th>
-                      <th 
-                        className="px-4 py-3 cursor-pointer hover:text-white transition-colors"
-                        onClick={() => handleSort('lastLoginAt')}
-                      >
-                        Utolsó belépés {sortField === 'lastLoginAt' && (sortOrder === 'asc' ? '↑' : '↓')}
-                      </th>
                       <th className="px-4 py-3 text-right">Műveletek</th>
                     </tr>
                   </thead>
@@ -412,17 +406,6 @@ export default function UsersListPage() {
                             <Badge variant={user.isActive ? 'success' : 'danger'}>
                               {user.isActive ? 'Aktív' : 'Inaktív'}
                             </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-gray-400 text-sm">
-                            {user.lastLoginAt 
-                              ? new Date(user.lastLoginAt).toLocaleDateString('hu-HU', {
-                                  year: 'numeric',
-                                  month: '2-digit',
-                                  day: '2-digit',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : 'Még nem lépett be'}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">

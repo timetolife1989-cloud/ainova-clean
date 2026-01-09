@@ -9,21 +9,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const { searchParams } = new URL(request.url);
     const period = searchParams.get('period') || 'napi';
@@ -98,11 +92,7 @@ export async function GET(request: NextRequest) {
       weekly: weeklyResult.recordset,
     });
 
-  } catch (error: any) {
-    console.error('[Kimutatás API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt az adatok lekérésekor', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Kimutatás API');
   }
 }

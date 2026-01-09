@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
+import { getErrorMessage, HTTP_STATUS } from '@/lib/api-utils';
 import bcrypt from 'bcrypt';
 import { DEFAULT_PAGE_SIZE, BCRYPT_ROUNDS } from '@/lib/constants';
 
@@ -88,8 +89,7 @@ export async function GET(request: NextRequest) {
         Shift as shift,
         Email as email,
         IsActive as isActive,
-        CreatedAt as createdAt,
-        LastLoginAt as lastLoginAt
+        CreatedAt as createdAt
       FROM dbo.AinovaUsers
       ${whereClause}
       ORDER BY 
@@ -115,7 +115,6 @@ export async function GET(request: NextRequest) {
       email: user.email,
       isActive: user.isActive,
       createdAt: user.createdAt?.toISOString(),
-      lastLoginAt: user.lastLoginAt?.toISOString() || null,
     }));
     
     return NextResponse.json({
@@ -130,11 +129,11 @@ export async function GET(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('[Admin Users] GET error:', error);
+    console.error('[Admin Users] GET error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Hiba történt a felhasználók lekérésekor',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }
 
@@ -220,8 +219,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Hash password with bcrypt (12 rounds)
-    const passwordHash = await bcrypt.hash(data.password, 12);
+    // Hash password with bcrypt
+    const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
 
     // Insert new user
     const result = await pool
@@ -259,10 +258,10 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
-    console.error('[Admin] User creation error:', error);
+    console.error('[Admin] User creation error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Szerver hiba történt a felhasználó létrehozásakor',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

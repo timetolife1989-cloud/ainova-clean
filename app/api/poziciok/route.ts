@@ -5,23 +5,17 @@
 // Method: GET
 // =====================================================
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, apiSuccess, ApiErrors, getErrorMessage } from '@/lib/api-utils';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const pool = await getPool();
 
@@ -36,16 +30,10 @@ export async function GET(request: NextRequest) {
       ORDER BY pozicio
     `);
 
-    return NextResponse.json({
-      success: true,
-      data: result.recordset,
-    });
+    return apiSuccess(result.recordset);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Pozíciók API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt', details: error.message },
-      { status: 500 }
-    );
+    return ApiErrors.internal(error, 'Pozíciók API');
   }
 }

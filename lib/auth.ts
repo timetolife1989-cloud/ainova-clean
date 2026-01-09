@@ -259,23 +259,19 @@ export async function login(
       };
     }
     
-    // 5. Verify password (handle both plain text and bcrypt hashed)
-    // Development mode: dev/admin users use plain text passwords
-    // Production mode: all passwords should be bcrypt hashed
-    let passwordMatch = false;
-    
-    // Try bcrypt first (for hashed passwords)
-    if (user.PasswordHash.startsWith('$2a$') || user.PasswordHash.startsWith('$2b$')) {
-      // Bcrypt hash detected (starts with $2a$ or $2b$)
-      passwordMatch = await bcrypt.compare(password, user.PasswordHash);
-    } else {
-      // Plain text password (development mode only - dev/admin users)
-      passwordMatch = password === user.PasswordHash;
-      
-      if (passwordMatch && process.env.NODE_ENV === 'production') {
-        console.warn(`[Auth] WARNING: Plain text password detected for user ${username} in production!`);
-      }
+    // 5. Verify password (bcrypt only - plain text NOT supported)
+    // SECURITY: All passwords must be bcrypt hashed
+    if (!user.PasswordHash.startsWith('$2a$') && !user.PasswordHash.startsWith('$2b$')) {
+      // Invalid hash format - password needs migration
+      console.error(`[Auth] SECURITY: Invalid password hash format for user ${username}. Password must be bcrypt hashed.`);
+      await logLoginAttempt(user.UserId, null, ipAddress, false, 'Invalid hash format');
+      return {
+        success: false,
+        error: 'Jelszavát frissíteni kell. Kérjük keresse az adminisztrátort.',
+      };
     }
+    
+    const passwordMatch = await bcrypt.compare(password, user.PasswordHash);
     
     if (!passwordMatch) {
       await logLoginAttempt(user.UserId, null, ipAddress, false, 'Invalid password');

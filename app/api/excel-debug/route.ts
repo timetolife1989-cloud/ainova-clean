@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors, getErrorMessage } from '@/lib/api-utils';
 
 export const runtime = 'nodejs';
 
@@ -15,16 +15,9 @@ const EXCEL_PATH = '\\\\sveeafs01.tdk-prod.net\\TDK_EEA_MAG_PEMC\\Administration
 
 export async function GET(request: NextRequest) {
   try {
-    // IDEIGLENES: Auth nélkül a debug-hoz
-    // const sessionId = request.cookies.get('sessionId')?.value;
-    // if (!sessionId) {
-    //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // }
-
-    // const session = await validateSession(sessionId);
-    // if (!session) {
-    //   return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    // }
+    // ✅ Session validation (debug tool requires authentication)
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     // Excel beolvasása
     let fileBuffer: Buffer;
@@ -155,11 +148,8 @@ export async function GET(request: NextRequest) {
       percek: percekAnalysis,
     });
 
-  } catch (error: any) {
-    console.error('[Excel Diagnosztika] Error:', error);
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-    }, { status: 500 });
+  } catch (error) {
+    console.error('[Excel Diagnosztika] Error:', getErrorMessage(error));
+    return ApiErrors.internal(error, 'Excel diagnosztika');
   }
 }

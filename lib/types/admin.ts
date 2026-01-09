@@ -35,7 +35,6 @@ export interface User {
   firstLogin: boolean;
   createdAt: Date;
   updatedAt: Date;
-  lastLoginAt: Date | null;
 }
 
 /**
@@ -50,7 +49,6 @@ export interface UserListItem {
   email: string | null;
   isActive: boolean;
   createdAt: string;
-  lastLoginAt: string | null;
 }
 
 /**

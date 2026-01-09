@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import { NAPI_PERCES_EXCEL_PATH, NAPI_PERCES_COLS, IMPORT_LOCK_TIMEOUT_MINUTES } from '@/lib/constants';
@@ -51,15 +51,9 @@ function parseNumber(value: any): number {
 // =====================================================
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const pool = await getPool();
 
@@ -80,12 +74,8 @@ export async function GET(request: NextRequest) {
       excelPath: NAPI_PERCES_EXCEL_PATH,
     });
 
-  } catch (error: any) {
-    console.error('[Napi Perces Import API] GET Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Napi Perces Import GET');
   }
 }
 
@@ -97,15 +87,9 @@ export async function POST(request: NextRequest) {
   let pool: any = null;
 
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const sessionCheck = await checkSession(request);
+    if (!sessionCheck.valid) return sessionCheck.response;
 
     pool = await getPool();
 
@@ -138,7 +122,7 @@ export async function POST(request: NextRequest) {
     // LOCK ACQUIRE
     // =====================================================
     await pool.request()
-      .input('user', sql.NVarChar, session.username || 'system')
+      .input('user', sql.NVarChar, sessionCheck.username || 'system')
       .query(`
         IF EXISTS (SELECT 1 FROM ainova_napi_perces_import_status WHERE import_type = 'napi_perces')
           UPDATE ainova_napi_perces_import_status 
@@ -388,9 +372,7 @@ export async function POST(request: NextRequest) {
       errors,
     });
 
-  } catch (error: any) {
-    console.error('[Napi Perces Import API] POST Error:', error);
-
+  } catch (error) {
     // Lock felszabadítása hiba esetén
     if (lockAcquired && pool) {
       try {
@@ -404,9 +386,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Import hiba', details: error.message },
-      { status: 500 }
-    );
+    return ApiErrors.internal(error, 'Napi Perces Import POST');
   }
 }

@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
+import { BCRYPT_ROUNDS } from '@/lib/constants';
 import bcrypt from 'bcrypt';
 
 /**
@@ -20,8 +21,10 @@ export async function POST(request: NextRequest) {
   try {
     // 1. Extract user info from middleware headers
     // Middleware validates session and adds user context to headers
+    // Note: Headers are URL-encoded to support Unicode characters
     const userId = request.headers.get('x-user-id');
-    const username = request.headers.get('x-username');
+    const usernameRaw = request.headers.get('x-username');
+    const username = usernameRaw ? decodeURIComponent(usernameRaw) : null;
     
     // Sanity check: If no user info, session validation failed
     if (!userId || !username) {
@@ -237,7 +240,7 @@ export async function POST(request: NextRequest) {
     }
     
     // 7. ✅ Hash new password
-    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+    const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     
     // 8. Update password in database
     await pool

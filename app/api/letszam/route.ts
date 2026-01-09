@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 
 const OPERATIV_POZICIOK = [
   'Huzalos tekercselő', 'Fóliás tekercselő', 'Előkészítő',
@@ -25,32 +25,20 @@ export async function GET(request: NextRequest) {
   let pool: sql.ConnectionPool | null = null;
 
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const { searchParams } = new URL(request.url);
     const datum = searchParams.get('datum');
     const muszak = searchParams.get('muszak');
 
     if (!datum || !muszak) {
-      return NextResponse.json(
-        { error: 'Missing datum or muszak parameter' }, 
-        { status: 400 }
-      );
+      return ApiErrors.badRequest('Hiányzó dátum vagy műszak paraméter');
     }
 
     if (!['A', 'B', 'C'].includes(muszak)) {
-      return NextResponse.json(
-        { error: 'Invalid muszak (must be A, B, or C)' }, 
-        { status: 400 }
-      );
+      return ApiErrors.badRequest('Érvénytelen műszak (A, B vagy C lehet)');
     }
 
     pool = await getPool();
@@ -106,12 +94,8 @@ export async function GET(request: NextRequest) {
       data: result.recordset
     });
 
-  } catch (error: any) {
-    console.error('[Létszám GET] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch létszám data', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Létszám GET');
   }
 }
 
@@ -120,38 +104,23 @@ export async function POST(request: NextRequest) {
   let transaction: sql.Transaction | null = null;
 
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const sessionCheck = await checkSession(request);
+    if (!sessionCheck.valid) return sessionCheck.response;
 
     const body = await request.json();
     const { datum, muszak, operativ, nemOperativ, indoklasok, riportKoteles } = body;
 
     if (!datum || !muszak) {
-      return NextResponse.json(
-        { error: 'Missing datum or muszak' },
-        { status: 400 }
-      );
+      return ApiErrors.badRequest('Hiányzó dátum vagy műszak');
     }
 
     if (!['A', 'B', 'C'].includes(muszak)) {
-      return NextResponse.json(
-        { error: 'Invalid muszak (must be A, B, or C)' },
-        { status: 400 }
-      );
+      return ApiErrors.badRequest('Érvénytelen műszak (A, B vagy C lehet)');
     }
 
     if (!Array.isArray(operativ) || !Array.isArray(nemOperativ)) {
-      return NextResponse.json(
-        { error: 'operativ and nemOperativ must be arrays' },
-        { status: 400 }
-      );
+      return ApiErrors.badRequest('operativ és nemOperativ tömbök szükségesek');
     }
 
     pool = await getPool();
@@ -159,7 +128,7 @@ export async function POST(request: NextRequest) {
     await transaction.begin();
 
     const clientIP = getClientIP(request);
-    const username = session.username;
+    const username = sessionCheck.username;
 
     const existingResult = await new sql.Request(transaction)
       .input('datum', sql.Date, datum)
@@ -324,7 +293,7 @@ export async function POST(request: NextRequest) {
       riportKoteles: !!riportKoteles
     });
 
-  } catch (error: any) {
+  } catch (error) {
     if (transaction) {
       try {
         await transaction.rollback();
@@ -333,10 +302,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.error('[Létszám POST] Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to save létszám data', details: error.message },
-      { status: 500 }
-    );
+    return ApiErrors.internal(error, 'Létszám POST');
   }
 }

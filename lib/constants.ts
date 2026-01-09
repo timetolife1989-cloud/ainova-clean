@@ -83,14 +83,6 @@ export const SHIFTS: ShiftConfig[] = [
 export const getShiftConfig = (shift: Shift): ShiftConfig | undefined => 
   SHIFTS.find(s => s.value === shift);
 
-// Műszak színek (diagram kompatibilitás)
-export const MUSZAK_COLORS = {
-  A: { bar: '#3B82F6', gradient: 'from-blue-500 to-blue-700', name: 'A műszak' },
-  B: { bar: '#10B981', gradient: 'from-emerald-500 to-emerald-700', name: 'B műszak' },
-  C: { bar: '#F97316', gradient: 'from-orange-500 to-orange-700', name: 'C műszak' },
-  SUM: { bar: '#64748B', gradient: 'from-slate-500 to-slate-700', name: 'Összesített' },
-} as const;
-
 // =====================================================
 // ADMIN BEÁLLÍTÁSOK
 // =====================================================

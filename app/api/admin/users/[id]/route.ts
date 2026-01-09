@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
 import { validateUpdateUser, formatValidationErrors } from '@/lib/validators/user';
+import { getErrorMessage, HTTP_STATUS } from '@/lib/api-utils';
 
 export const runtime = 'nodejs';
 
@@ -48,8 +49,7 @@ export async function GET(request: NextRequest, context: RouteParams) {
           IsActive as isActive,
           FirstLogin as firstLogin,
           CreatedAt as createdAt,
-          UpdatedAt as updatedAt,
-          LastLoginAt as lastLoginAt
+          UpdatedAt as updatedAt
         FROM dbo.AinovaUsers
         WHERE UserId = @userId
       `);
@@ -76,16 +76,15 @@ export async function GET(request: NextRequest, context: RouteParams) {
         firstLogin: user.firstLogin,
         createdAt: user.createdAt?.toISOString(),
         updatedAt: user.updatedAt?.toISOString(),
-        lastLoginAt: user.lastLoginAt?.toISOString(),
       },
     });
 
   } catch (error) {
-    console.error('[Admin User] GET error:', error);
+    console.error('[Admin User] GET error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Hiba történt a felhasználó lekérésekor',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }
 
@@ -248,11 +247,11 @@ export async function PATCH(request: NextRequest, context: RouteParams) {
     });
 
   } catch (error) {
-    console.error('[Admin User] PATCH error:', error);
+    console.error('[Admin User] PATCH error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Hiba történt a felhasználó módosításakor',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }
 
@@ -353,10 +352,10 @@ export async function DELETE(request: NextRequest, context: RouteParams) {
     }
 
   } catch (error) {
-    console.error('[Admin User] DELETE error:', error);
+    console.error('[Admin User] DELETE error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Hiba történt a felhasználó törlésekor',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

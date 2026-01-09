@@ -118,14 +118,13 @@ export async function GET(request: NextRequest) {
       lastImportAt: status.last_import_at,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Import Check] Error:', error);
     // Hiba esetén inkább próbáljuk meg
     return NextResponse.json({
       needsImport: true,
       reason: 'check_error',
       canStartImport: true,
-      error: error.message,
     });
   }
 }

@@ -1,78 +1,29 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/dashboard';
-import RiportKotelesModal from '@/components/letszam/RiportKotelesModal';
-
-// Pozíciók definíciója (a régi működő verzióból)
-const POSITIONS = [
-  { id: 'preparator', name: 'Előkészítő', productive: true },
-  { id: 'wireWinder', name: 'Huzalos tekercselő', productive: true },
-  { id: 'tapeWinder', name: 'Fóliás tekercselő', productive: true },
-  { id: 'milling', name: 'Maró-ónozó', productive: true },
-  { id: 'lacAssembler', name: 'LaC szerelő', productive: true },
-  { id: 'smallDCAssembler', name: 'Kis DC szerelő', productive: true },
-  { id: 'largeDCAssembler', name: 'Nagy DC szerelő', productive: true },
-  { id: 'electricTester', name: 'Mérő', productive: true },
-  { id: 'impregnation', name: 'Impregnáló', productive: true },
-  { id: 'finalAssembler', name: 'Végszerelő', productive: true },
-  { id: 'packer', name: 'Csomagoló', productive: true },
-  { id: 'planner', name: 'Gyártásszervező', productive: false },
-  { id: 'shiftLeader', name: 'Műszakvezető', productive: false },
-  { id: 'qualityInspector', name: 'Minőségellenőr', productive: false },
-];
-
-const SHIFTS = [
-  { id: 'morning', name: 'Délelőttös műszak', time: '05:45 - 13:45' },
-  { id: 'afternoon', name: 'Délutános műszak', time: '13:45 - 21:45' },
-  { id: 'night', name: 'Éjszakás műszak', time: '21:45 - 05:45' },
-];
-
-// Műszak automatikus meghatározása az aktuális idő alapján
-function getEffectiveDate(): { date: Date; shiftId: string } {
-  const now = new Date();
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
-  const currentTime = hours * 60 + minutes;
-
-  const morningStart = 5 * 60 + 45;   // 05:45
-  const afternoonStart = 13 * 60 + 45; // 13:45
-  const nightStart = 21 * 60 + 45;     // 21:45
-
-  const effectiveDate = new Date(now);
-  let shiftId = 'morning';
-
-  if (currentTime >= nightStart || currentTime < morningStart) {
-    shiftId = 'night';
-    if (currentTime < morningStart) {
-      effectiveDate.setDate(effectiveDate.getDate() - 1);
-    }
-  } else if (currentTime >= afternoonStart) {
-    shiftId = 'afternoon';
-  }
-
-  return { date: effectiveDate, shiftId };
-}
-
-type StaffData = {
-  [positionId: string]: { present: string; vacation: string; sickLeave: string };
-};
+import {
+  RiportKotelesModal,
+  POSITIONS,
+  SHIFTS,
+  SHIFT_TO_API,
+  API_TO_SHIFT,
+  getEffectiveDate,
+  initializeStaffData,
+  toNum,
+  StaffData,
+  ExistingRecord,
+} from '@/components/letszam';
 
 export default function LetszamPage() {
   const router = useRouter();
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // State - egyszerű, mint a régi működő verzióban
+  // State
   const [recordDate, setRecordDate] = useState<Date>(() => getEffectiveDate().date);
   const [selectedShift, setSelectedShift] = useState<string>(() => getEffectiveDate().shiftId);
-  const [data, setData] = useState<StaffData>(() => {
-    const initial: StaffData = {};
-    POSITIONS.forEach((pos) => {
-      initial[pos.id] = { present: '0', vacation: '0', sickLeave: '0' };
-    });
-    return initial;
-  });
+  const [data, setData] = useState<StaffData>(initializeStaffData);
 
   // Modal states
   const [showFutureError, setShowFutureError] = useState(false);
@@ -124,7 +75,6 @@ export default function LetszamPage() {
   // Számítások
   const productivePositions = POSITIONS.filter((p) => p.productive);
   const nonProductivePositions = POSITIONS.filter((p) => !p.productive);
-  const toNum = (val: string) => parseInt(val, 10) || 0;
 
   const sumProductive = {
     present: productivePositions.reduce((s, p) => s + toNum(data[p.id].present), 0),
@@ -153,13 +103,6 @@ export default function LetszamPage() {
     return Math.round((selected.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // Műszak mapping frontend -> API
-  const SHIFT_TO_API: Record<string, string> = {
-    morning: 'A',
-    afternoon: 'B',
-    night: 'C',
-  };
-
   // Létezik-e már adat ellenőrzése
   const checkExistingData = async (): Promise<{ 
     exists: boolean; 
@@ -178,7 +121,6 @@ export default function LetszamPage() {
       
       if (result.success && !result.isEmpty && result.data.length > 0) {
         const firstRecord = result.data[0];
-        const shiftMap: Record<string, string> = { 'A': 'Délelőttös', 'B': 'Délutános', 'C': 'Éjszakás' };
         return {
           exists: true,
           savedBy: firstRecord.rogzitette_user || 'Ismeretlen',
@@ -187,7 +129,7 @@ export default function LetszamPage() {
             : 'Ismeretlen időpont',
           fullName: firstRecord.rogzitette_fullname || '',
           role: firstRecord.rogzitette_role || '',
-          shift: shiftMap[firstRecord.rogzitette_shift] || firstRecord.rogzitette_shift || '',
+          shift: API_TO_SHIFT[firstRecord.rogzitette_shift] || firstRecord.rogzitette_shift || '',
           email: firstRecord.rogzitette_email || ''
         };
       }

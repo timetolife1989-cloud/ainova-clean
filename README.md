@@ -36,12 +36,10 @@ npm run db:test   # Adatbázis teszt
 npm run lint      # ESLint
 ```
 
-## 🔐 Alapértelmezett Bejelentkezés
+## 🔐 Bejelentkezés
 
-| User | Jelszó | Szerep |
-|------|--------|--------|
-| dev | dev | Admin |
-| admin | admin123 | Admin |
+SAP usernév + jelszó (bcrypt hash).
+Alapértelmezett jelszó visszaállítás után: `Ainova2025!`
 
 ## 📂 Projekt Struktúra
 

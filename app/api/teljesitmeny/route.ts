@@ -15,22 +15,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 import { DAILY_TARGET_MINUTES, MIN_VALID_DAILY_MINUTES } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'napi-kimutatas';
@@ -484,7 +478,7 @@ export async function GET(request: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({ error: 'Invalid type parameter. Valid types: napi-kimutatas, heti-kimutatas, havi-kimutatas, egyeni-ranglista, egyeni-trend' }, { status: 400 });
+        return ApiErrors.badRequest('Érvénytelen type paraméter. Érvényes: napi-kimutatas, heti-kimutatas, havi-kimutatas, egyeni-ranglista, egyeni-trend');
     }
 
     return NextResponse.json({
@@ -493,11 +487,7 @@ export async function GET(request: NextRequest) {
       data: result.recordset,
     });
 
-  } catch (error: any) {
-    console.error('[Teljesítmény API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt az adatok lekérésekor', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Teljesítmény API');
   }
 }

@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { getPool, sql } from '@/lib/db';
+import { getErrorMessage, HTTP_STATUS } from '@/lib/api-utils';
 import bcrypt from 'bcrypt';
 
 export const runtime = 'nodejs';
@@ -66,16 +67,17 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
     
-    // Verify password (handle both plain text and bcrypt hashed)
-    let passwordMatch = false;
-    
-    if (user.PasswordHash.startsWith('$2a$') || user.PasswordHash.startsWith('$2b$')) {
-      // Bcrypt hash detected
-      passwordMatch = await bcrypt.compare(password, user.PasswordHash);
-    } else {
-      // Plain text password (development mode only)
-      passwordMatch = password === user.PasswordHash;
+    // Verify password (bcrypt only - plain text NOT supported)
+    // SECURITY: All passwords must be bcrypt hashed
+    if (!user.PasswordHash.startsWith('$2a$') && !user.PasswordHash.startsWith('$2b$')) {
+      console.error(`[Admin] SECURITY: Invalid password hash format for user ${username}`);
+      return NextResponse.json({
+        success: false,
+        error: 'Jelszavát frissíteni kell. Kérjük keresse az adminisztrátort.',
+      }, { status: 401 });
     }
+    
+    const passwordMatch = await bcrypt.compare(password, user.PasswordHash);
     
     if (!passwordMatch) {
       console.log(`[Admin] Verification failed: invalid password - ${username}`);
@@ -93,10 +95,10 @@ export async function POST(request: Request) {
     });
     
   } catch (error) {
-    console.error('[Admin] Verification error:', error);
+    console.error('[Admin] Verification error:', getErrorMessage(error));
     return NextResponse.json({
       success: false,
       error: 'Szerver hiba történt',
-    }, { status: 500 });
+    }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

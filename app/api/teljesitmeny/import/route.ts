@@ -15,7 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import { TELJESITMENY_EXCEL_PATH, SHEET_FILTER_LETSZAM, SHEET_PERCEK, IMPORT_LOCK_TIMEOUT_MINUTES, DAILY_TARGET_MINUTES, IMPORT_LOOKBACK_DAYS } from '@/lib/constants';
@@ -54,15 +54,9 @@ function parseExcelDate(header: string): Date | null {
 // =====================================================
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const pool = await getPool();
 
@@ -84,12 +78,8 @@ export async function GET(request: NextRequest) {
       excelPath: TELJESITMENY_EXCEL_PATH,
     });
 
-  } catch (error: any) {
-    console.error('[Teljesítmény Import API] GET Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Teljesítmény Import GET');
   }
 }
 
@@ -101,15 +91,9 @@ export async function POST(request: NextRequest) {
   let pool: any = null;
 
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const sessionCheck = await checkSession(request);
+    if (!sessionCheck.valid) return sessionCheck.response;
 
     pool = await getPool();
 
@@ -162,7 +146,7 @@ export async function POST(request: NextRequest) {
     // LOCK ACQUIRE - Jelezzük hogy mi importálunk
     // =====================================================
     await pool.request()
-      .input('user', sql.NVarChar, session.username || 'system')
+      .input('user', sql.NVarChar, sessionCheck.username || 'system')
       .query(`
         IF EXISTS (SELECT 1 FROM ainova_import_status WHERE import_type = 'teljesitmeny')
           UPDATE ainova_import_status 
@@ -526,9 +510,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-  } catch (error: any) {
-    console.error('[Teljesítmény Import API] POST Error:', error);
-    
+  } catch (error) {
     // LOCK RELEASE on error
     if (lockAcquired && pool) {
       try {
@@ -542,9 +524,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Import hiba', details: error.message },
-      { status: 500 }
-    );
+    return ApiErrors.internal(error, 'Teljesítmény Import POST');
   }
 }

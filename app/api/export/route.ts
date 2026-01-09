@@ -9,22 +9,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const body = await request.json();
     const { type, period = 'heti', muszak } = body;
@@ -171,11 +165,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-  } catch (error: any) {
-    console.error('[Export API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Export hiba', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Export API');
   }
 }

@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sql from 'mssql';
 import { getPool } from '@/lib/db';
-import { validateSession } from '@/lib/auth';
+import { checkSession, ApiErrors } from '@/lib/api-utils';
 import * as XLSX from 'xlsx';
 import * as fs from 'fs';
 import { NAPI_PERCES_EXCEL_PATH, NAPI_PERCES_COLS } from '@/lib/constants';
@@ -184,15 +184,9 @@ async function autoImportIfNeeded(pool: any): Promise<void> {
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionId = request.cookies.get('sessionId')?.value;
-    if (!sessionId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = await validateSession(sessionId);
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'napi';
@@ -359,7 +353,7 @@ export async function GET(request: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({ error: 'Invalid type parameter. Valid: napi, heti, havi' }, { status: 400 });
+        return ApiErrors.badRequest('Érvénytelen type paraméter. Érvényes: napi, heti, havi');
     }
 
     return NextResponse.json({
@@ -368,11 +362,7 @@ export async function GET(request: NextRequest) {
       data: result.recordset,
     });
 
-  } catch (error: any) {
-    console.error('[Napi Perces API] Error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Hiba történt', details: error.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    return ApiErrors.internal(error, 'Napi Perces API');
   }
 }
