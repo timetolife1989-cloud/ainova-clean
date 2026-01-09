@@ -80,8 +80,15 @@ export async function GET(request: NextRequest) {
     dataRequest.input('offset', sql.Int, offset);
     dataRequest.input('pageSize', sql.Int, pageSize);
     
-    const dataResult = await dataRequest.query(`
-      SELECT 
+    // Check which columns exist
+    const colCheck = await pool.request().query(`
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = 'AinovaUsers' AND TABLE_SCHEMA = 'dbo'
+    `);
+    const existingCols = colCheck.recordset.map(r => r.COLUMN_NAME.toLowerCase());
+    
+    // Build SELECT columns dynamically
+    let selectCols = `
         UserId as id,
         Username as username,
         FullName as fullName,
@@ -89,7 +96,32 @@ export async function GET(request: NextRequest) {
         Shift as shift,
         Email as email,
         IsActive as isActive,
-        CreatedAt as createdAt
+        CreatedAt as createdAt`;
+    
+    if (existingCols.includes('telefon')) {
+      selectCols += ',\n        Telefon as telefon';
+    }
+    if (existingCols.includes('jogsi_gyalog_targonca')) {
+      selectCols += ',\n        jogsi_gyalog_targonca';
+    }
+    if (existingCols.includes('jogsi_forgo_daru')) {
+      selectCols += ',\n        jogsi_forgo_daru';
+    }
+    if (existingCols.includes('jogsi_futo_daru')) {
+      selectCols += ',\n        jogsi_futo_daru';
+    }
+    if (existingCols.includes('jogsi_newton_emelo')) {
+      selectCols += ',\n        jogsi_newton_emelo';
+    }
+    if (existingCols.includes('orvosi_lejarat')) {
+      selectCols += ',\n        orvosi_lejarat';
+    }
+    if (existingCols.includes('orvosi_poziciok')) {
+      selectCols += ',\n        orvosi_poziciok';
+    }
+    
+    const dataResult = await dataRequest.query(`
+      SELECT ${selectCols}
       FROM dbo.AinovaUsers
       ${whereClause}
       ORDER BY 
@@ -113,6 +145,13 @@ export async function GET(request: NextRequest) {
       role: user.role,
       shift: user.shift,
       email: user.email,
+      telefon: user.telefon || null,
+      jogsi_gyalog_targonca: user.jogsi_gyalog_targonca || false,
+      jogsi_forgo_daru: user.jogsi_forgo_daru || false,
+      jogsi_futo_daru: user.jogsi_futo_daru || false,
+      jogsi_newton_emelo: user.jogsi_newton_emelo || false,
+      orvosi_lejarat: user.orvosi_lejarat || null,
+      orvosi_poziciok: user.orvosi_poziciok || null,
       isActive: user.isActive,
       createdAt: user.createdAt?.toISOString(),
     }));

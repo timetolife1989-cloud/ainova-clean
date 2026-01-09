@@ -31,6 +31,18 @@ export interface User {
   role: UserRole;
   shift: Shift;
   email: string | null;
+  telefon: string | null;
+  torzsszam: string | null;  // Ha van operátor törzsszám is
+  // Jogosítványok
+  jogsi_gyalog_targonca: boolean;
+  jogsi_forgo_daru: boolean;
+  jogsi_futo_daru: boolean;
+  jogsi_newton_emelo: boolean;
+  // Orvosi
+  orvosi_kezdete: string | null;
+  orvosi_lejarat: string | null;
+  orvosi_poziciok: string | null;
+  // Státusz
   isActive: boolean;
   firstLogin: boolean;
   createdAt: Date;
@@ -47,6 +59,16 @@ export interface UserListItem {
   role: UserRole;
   shift: Shift;
   email: string | null;
+  telefon: string | null;
+  // Jogosítványok
+  jogsi_gyalog_targonca: boolean;
+  jogsi_forgo_daru: boolean;
+  jogsi_futo_daru: boolean;
+  jogsi_newton_emelo: boolean;
+  // Orvosi
+  orvosi_lejarat: string | null;
+  orvosi_poziciok: string | null;
+  // Státusz
   isActive: boolean;
   createdAt: string;
 }
@@ -72,6 +94,16 @@ export interface UpdateUserPayload {
   role?: UserRole;
   shift?: Shift;
   email?: string;
+  telefon?: string;
+  // Jogosítványok
+  jogsi_gyalog_targonca?: boolean;
+  jogsi_forgo_daru?: boolean;
+  jogsi_futo_daru?: boolean;
+  jogsi_newton_emelo?: boolean;
+  // Orvosi
+  orvosi_kezdete?: string;
+  orvosi_lejarat?: string;
+  orvosi_poziciok?: string;
   isActive?: boolean;
 }
 

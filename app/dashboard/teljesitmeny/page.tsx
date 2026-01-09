@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Header from '@/components/dashboard/Header';
 import AinovaLoader from '@/components/ui/AinovaLoader';
+import { ImportStatusBar } from '@/components/ui/ImportStatusBar';
 import {
   // Types
   MuszakType,
@@ -24,7 +25,6 @@ import {
   TeljesitmenyChart,
   ChartLegend,
   TeljesitmenyTable,
-  ImportStatusBar,
   OperatorRanglista,
   EgyeniTrendView,
 } from '@/components/teljesitmeny';
@@ -193,7 +193,15 @@ export default function TeljesitmenyPage() {
 
       <main className="p-6 pt-[90px]">
         {/* Import Status Bar */}
-        {importStatus && <ImportStatusBar status={importStatus} />}
+        {importStatus && (
+          <ImportStatusBar 
+            lastImportAt={importStatus.last_import_at}
+            recordCount={importStatus.records_imported || 0}
+            secondaryLabel="Operátorok"
+            secondaryValue={importStatus.unique_operators || 0}
+            secondarySuffix="fő"
+          />
+        )}
 
         {/* Top Controls */}
         <div className="flex items-start gap-8 mb-4">

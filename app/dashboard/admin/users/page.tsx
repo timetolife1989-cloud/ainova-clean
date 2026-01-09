@@ -64,6 +64,160 @@ function getShiftBadgeVariant(shift: string | null): 'blue' | 'green' | 'orange'
   return shift ? (map[shift] || 'default' as 'blue') : 'default' as 'blue';
 }
 
+// Jogosítványok tooltip komponens
+function JogsiTooltip({ user }: { user: UserListItem }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const jogsiList = [
+    { key: 'jogsi_gyalog_targonca', label: 'Gyalog kíséretű targonca', icon: '🚜', has: user.jogsi_gyalog_targonca },
+    { key: 'jogsi_forgo_daru', label: 'Forgó daru', icon: '🏗️', has: user.jogsi_forgo_daru },
+    { key: 'jogsi_futo_daru', label: 'Futó daru', icon: '🔩', has: user.jogsi_futo_daru },
+    { key: 'jogsi_newton_emelo', label: 'Newton emelő', icon: '⬆️', has: user.jogsi_newton_emelo },
+  ];
+  
+  const activeJogsi = jogsiList.filter(j => j.has);
+  
+  if (activeJogsi.length === 0) {
+    return <span className="text-gray-500">-</span>;
+  }
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="cursor-pointer"
+      >
+        <Badge variant="cyan">
+          {activeJogsi.length} db
+        </Badge>
+      </button>
+      
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="absolute z-50 top-full left-0 mt-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-3 min-w-[200px]">
+            <p className="text-xs text-gray-400 mb-2 font-medium">Gépkezelői jogosítványok:</p>
+            <div className="space-y-1">
+              {activeJogsi.map(j => (
+                <div key={j.key} className="flex items-center gap-2 text-sm text-white">
+                  <span>{j.icon}</span>
+                  <span>{j.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Orvosi alkalmassági tooltip komponens
+interface OrvosiEntry {
+  id: number;
+  pozicio_nev: string;
+  kezdete: string;
+  lejarat: string;
+  status: string;
+}
+
+function OrvosTooltip({ user }: { user: UserListItem }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [orvosik, setOrvosik] = useState<OrvosiEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetched, setFetched] = useState(false);
+
+  // Ha nincs orvosi lejárat, nincs mit mutatni
+  if (!user.orvosi_lejarat) {
+    return <span className="text-gray-500">-</span>;
+  }
+
+  const handleOpen = async () => {
+    setIsOpen(true);
+    
+    // Csak egyszer kérjük le
+    if (!fetched) {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/admin/users/${user.id}/orvosi`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setOrvosik(data.data);
+        }
+      } catch (err) {
+        console.error('Orvosi adatok lekérése sikertelen:', err);
+      } finally {
+        setLoading(false);
+        setFetched(true);
+      }
+    }
+  };
+
+  // Lejárat státusz
+  const lejarat = new Date(user.orvosi_lejarat);
+  const now = new Date();
+  const diff = (lejarat.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  const status = diff < 0 ? 'danger' : diff < 30 ? 'warning' : 'success';
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={handleOpen}
+        className="cursor-pointer"
+      >
+        <Badge variant={status}>
+          {new Date(user.orvosi_lejarat).toLocaleDateString('hu-HU')}
+        </Badge>
+      </button>
+      
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="absolute z-50 top-full left-0 mt-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-3 min-w-[280px]">
+            <p className="text-xs text-gray-400 mb-2 font-medium">🏥 Orvosi alkalmassági vizsgálatok:</p>
+            
+            {loading ? (
+              <div className="flex items-center justify-center py-3">
+                <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+              </div>
+            ) : orvosik.length > 0 ? (
+              <div className="space-y-2">
+                {orvosik.map(o => {
+                  const oLejarat = new Date(o.lejarat);
+                  const oDiff = (oLejarat.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+                  const oStatus = oDiff < 0 ? 'lejárt' : oDiff < 30 ? 'hamarosan' : 'érvényes';
+                  const statusColor = oDiff < 0 ? 'text-red-400' : oDiff < 30 ? 'text-yellow-400' : 'text-green-400';
+                  const statusBg = oDiff < 0 ? 'border-red-500/30' : oDiff < 30 ? 'border-yellow-500/30' : 'border-green-500/30';
+                  
+                  return (
+                    <div key={o.id} className={`p-2 rounded border ${statusBg} bg-slate-900/50`}>
+                      <div className="flex justify-between items-start">
+                        <span className="text-white font-medium text-sm">{o.pozicio_nev}</span>
+                        <span className={`text-xs ${statusColor}`}>{oStatus}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {new Date(o.kezdete).toLocaleDateString('hu-HU')} → {new Date(o.lejarat).toLocaleDateString('hu-HU')}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm py-2">Nincs részletes adat</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // =====================================================
 // Fő komponens
 // =====================================================
@@ -368,73 +522,87 @@ export default function UsersListPage() {
                         Pozíció {sortField === 'role' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </th>
                       <th className="px-4 py-3">Műszak</th>
+                      <th className="px-4 py-3">Telefon</th>
+                      <th className="px-4 py-3">Jogosítványok</th>
+                      <th className="px-4 py-3">Orvosi</th>
                       <th className="px-4 py-3">Státusz</th>
                       <th className="px-4 py-3 text-right">Műveletek</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/50">
                     <AnimatePresence>
-                      {sortedUsers.map((user) => (
-                        <motion.tr
-                          key={user.id}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className={`hover:bg-slate-700/30 transition-colors ${!user.isActive ? 'opacity-50' : ''}`}
-                        >
-                          <td className="px-4 py-3 font-mono text-white">
-                            {user.username}
-                          </td>
-                          <td className="px-4 py-3 text-white">
-                            {user.fullName}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={getRoleBadgeVariant(user.role)}>
-                              {user.role}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            {user.shift ? (
-                              <Badge variant={getShiftBadgeVariant(user.shift)}>
-                                {user.shift} műszak
+                      {sortedUsers.map((user) => {
+                        return (
+                          <motion.tr
+                            key={user.id}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className={`hover:bg-slate-700/30 transition-colors ${!user.isActive ? 'opacity-50' : ''}`}
+                          >
+                            <td className="px-4 py-3 font-mono text-white">
+                              {user.username}
+                            </td>
+                            <td className="px-4 py-3 text-white">
+                              {user.fullName}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={getRoleBadgeVariant(user.role)}>
+                                {user.role}
                               </Badge>
-                            ) : (
-                              <span className="text-gray-500">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={user.isActive ? 'success' : 'danger'}>
-                              {user.isActive ? 'Aktív' : 'Inaktív'}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleEdit(user.id)}
-                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                title="Szerkesztés"
-                              >
-                                ✏️
+                            </td>
+                            <td className="px-4 py-3">
+                              {user.shift ? (
+                                <Badge variant={getShiftBadgeVariant(user.shift)}>
+                                  {user.shift} műszak
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-500">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-gray-300 text-sm">
+                              {user.telefon || <span className="text-gray-500">-</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <JogsiTooltip user={user} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <OrvosTooltip user={user} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={user.isActive ? 'success' : 'danger'}>
+                                {user.isActive ? 'Aktív' : 'Inaktív'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleEdit(user.id)}
+                                  className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                  title="Szerkesztés"
+                                >
+                                  ✏️
                               </button>
-                              <button
-                                onClick={() => handleResetPassword(user.id, user.username)}
-                                className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors"
-                                title="Jelszó visszaállítása"
-                              >
-                                🔑
-                              </button>
-                              <button
-                                onClick={() => handleDeactivate(user.id, user.username)}
-                                className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                                title="Deaktiválás"
-                                disabled={!user.isActive}
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      ))}
+                                <button
+                                  onClick={() => handleResetPassword(user.id, user.username)}
+                                  className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg transition-colors"
+                                  title="Jelszó visszaállítása"
+                                >
+                                  🔑
+                                </button>
+                                <button
+                                  onClick={() => handleDeactivate(user.id, user.username)}
+                                  className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  title="Deaktiválás"
+                                  disabled={!user.isActive}
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        );
+                      })}
                     </AnimatePresence>
                   </tbody>
                 </table>

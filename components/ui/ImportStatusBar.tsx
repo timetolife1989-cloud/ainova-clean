@@ -1,13 +1,27 @@
 'use client';
 
 import React from 'react';
-import { ImportStatus } from './types';
+
+// =====================================================
+// Közös ImportStatusBar komponens
+// Használható: Teljesítmény, Napi Perces modulokban
+// =====================================================
 
 interface ImportStatusBarProps {
-  status: ImportStatus;
+  lastImportAt: string | null;
+  recordCount: number;
+  secondaryLabel?: string;
+  secondaryValue?: number | string;
+  secondarySuffix?: string;
 }
 
-export function ImportStatusBar({ status }: ImportStatusBarProps) {
+export function ImportStatusBar({
+  lastImportAt,
+  recordCount,
+  secondaryLabel = 'Operátorok',
+  secondaryValue = 0,
+  secondarySuffix = 'fő',
+}: ImportStatusBarProps) {
   return (
     <div className="mb-4 flex items-center justify-between bg-slate-800/50 rounded-lg px-4 py-2 border border-slate-700">
       <div className="flex items-center gap-4">
@@ -15,8 +29,8 @@ export function ImportStatusBar({ status }: ImportStatusBarProps) {
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-xs text-slate-400">Utolsó szinkronizálás:</span>
           <span className="text-xs text-white font-medium">
-            {status.last_import_at
-              ? new Date(status.last_import_at).toLocaleString('hu-HU')
+            {lastImportAt
+              ? new Date(lastImportAt).toLocaleString('hu-HU')
               : 'Nincs adat'}
           </span>
         </div>
@@ -24,14 +38,14 @@ export function ImportStatusBar({ status }: ImportStatusBarProps) {
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400">Rekordok:</span>
           <span className="text-xs text-emerald-400 font-medium">
-            {status.records_imported?.toLocaleString() || 0}
+            {recordCount?.toLocaleString() || 0}
           </span>
         </div>
         <div className="h-4 w-px bg-slate-600" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Operátorok:</span>
+          <span className="text-xs text-slate-400">{secondaryLabel}:</span>
           <span className="text-xs text-blue-400 font-medium">
-            {status.unique_operators || 0} fő
+            {secondaryValue} {secondarySuffix}
           </span>
         </div>
       </div>

@@ -6,7 +6,7 @@
 export * from './types';
 
 // Components
-export { default as ImportStatusBar } from './ImportStatusBar';
+export { ImportStatusBar } from '@/components/ui/ImportStatusBar';
 export { default as KimutatSelector } from './KimutatSelector';
 export { default as ChartTooltip } from './ChartTooltip';
 export { default as NapiPercesChart } from './NapiPercesChart';

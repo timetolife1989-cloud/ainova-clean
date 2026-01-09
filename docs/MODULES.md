@@ -1,6 +1,6 @@
 # 📚 AINOVA Modul Dokumentáció
 
-**Frissítve:** 2026. január 7.
+**Frissítve:** 2025. január 27.
 
 ---
 
@@ -77,7 +77,43 @@ Felhasználók kezelése, rendszer adminisztráció.
 
 ---
 
-## 👷 3. LÉTSZÁM MODUL
+## � 3. OPERÁTOR MODUL
+
+### Leírás
+Operátorok kezelése: jogosítványok, orvosi vizsga nyilvántartás.
+
+### Fájlok
+| Fájl | Funkció |
+|------|---------|
+| `app/api/operatorok/route.ts` | Operátor lista API |
+| `app/api/operatorok/[id]/route.ts` | Operátor CRUD |
+| `app/api/operatorok/[id]/orvosi/route.ts` | Operátor orvosi API |
+| `app/dashboard/admin/operatorok/page.tsx` | Operátor kezelő oldal |
+| `components/operatorok/*` | Operátor komponensek |
+
+### Funkciók
+- **Operátor lista:** Keresés, szűrés (műszak, pozíció)
+- **Jogosítványok:** Pozíciónkénti jogosítványok kezelése
+- **Orvosi vizsgálatok:** Pozíciónkénti orvosi érvényesség kezelése
+- **Tömeges módosítás:** Több operátor egyszerre
+
+### Adatbázis táblák
+- `ainova_operatorok` - Operátor master adat
+- `ainova_poziciok` - Pozíciók listája
+- `ainova_operator_orvosi` - Pozíciónkénti orvosi vizsgálatok
+
+### Jogosítvány típusok
+- Fóliás tekercselő
+- Huzalos tekercselő
+- Impregnáló
+- LaC szerelő
+- Maró-ónozó
+- Mérő (BME/CE)
+- Csomagoló
+
+---
+
+## 👷 4. LÉTSZÁM MODUL
 
 ### Leírás
 Napi létszám adatok rögzítése műszakonként.
@@ -117,7 +153,7 @@ Napi létszám adatok rögzítése műszakonként.
 
 ---
 
-## 📊 4. TELJESÍTMÉNY MODUL
+## 📊 5. TELJESÍTMÉNY MODUL
 
 ### Leírás
 Operátori teljesítmény kimutatások és ranglisták.
@@ -157,7 +193,7 @@ Operátori teljesítmény kimutatások és ranglisták.
 
 ---
 
-## 📈 5. NAPI PERCES MODUL
+## 📈 6. NAPI PERCES MODUL
 
 ### Leírás
 Lehívás vs Leadás összehasonlítás napi szinten.
@@ -185,7 +221,7 @@ Lehívás vs Leadás összehasonlítás napi szinten.
 
 ---
 
-## 📋 6. KIMUTATÁS MODUL
+## 📋 7. KIMUTATÁS MODUL
 
 ### Leírás
 Létszám és leadás statisztikák összesítése.
@@ -205,7 +241,7 @@ Létszám és leadás statisztikák összesítése.
 
 ---
 
-## 📤 7. EXPORT MODUL
+## 📤 8. EXPORT MODUL
 
 ### Leírás
 Adatok exportálása Excel formátumba.
@@ -252,4 +288,4 @@ Adatok exportálása Excel formátumba.
 
 ---
 
-*Utoljára frissítve: 2026. január 7.*
+*Utoljára frissítve: 2025. január 27.*

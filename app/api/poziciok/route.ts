@@ -3,6 +3,8 @@
 // =====================================================
 // Purpose: Distinct pozíciók lekérése az operátor táblából
 // Method: GET
+// Query params:
+//   - kihagyKategoria: Kihagyandó kategória (pl. "Vezetői")
 // =====================================================
 
 import { NextRequest } from 'next/server';
@@ -18,17 +20,27 @@ export async function GET(request: NextRequest) {
     if (!session.valid) return session.response;
 
     const pool = await getPool();
+    
+    // Query paraméterek
+    const { searchParams } = new URL(request.url);
+    const kihagyKategoria = searchParams.get('kihagyKategoria');
 
-    // Distinct pozíciók lekérése (ahol nem 'Admin adja meg' és nem üres)
-    const result = await pool.request().query(`
-      SELECT DISTINCT pozicio AS nev
-      FROM ainova_operatorok
-      WHERE pozicio IS NOT NULL 
-        AND pozicio <> ''
-        AND pozicio <> 'Admin adja meg'
-        AND aktiv = 1
-      ORDER BY pozicio
-    `);
+    // Pozíciók a referencia táblából
+    const req = pool.request();
+    let query = `
+      SELECT id, nev, kategoria, sorrend
+      FROM ainova_poziciok
+    `;
+    
+    // Ha van kihagyandó kategória, szűrjük
+    if (kihagyKategoria) {
+      query += ` WHERE kategoria != @kihagyKategoria`;
+      req.input('kihagyKategoria', kihagyKategoria);
+    }
+    
+    query += ` ORDER BY sorrend, nev`;
+    
+    const result = await req.query(query);
 
     return apiSuccess(result.recordset);
 

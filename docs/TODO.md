@@ -1,6 +1,6 @@
 # ✅ AINOVA Fejlesztési TODO Lista
 
-**Frissítve:** 2026. január 7.
+**Frissítve:** 2025. január 27.
 
 ---
 
@@ -17,19 +17,18 @@
 - [ ] Migration script: meglévő plain text jelszavak hash-elése
 - [ ] `.env` flag: `ALLOW_PLAINTEXT_PASSWORDS=false`
 
-### K3. Teljesítmény oldal darabolása
-- [ ] `TeljesitmenyChart.tsx` komponens kiemelése
-- [ ] `EgyeniRanglista.tsx` komponens kiemelése  
-- [ ] `EgyeniTrend.tsx` komponens kiemelése
-- [ ] `MuszakSelector.tsx` közös komponens
-- [ ] Custom hooks: `useTeljesitmenyData.ts`, `useEgyeniData.ts`
-- **Cél:** 1309 sor → max 300 sor/fájl
+### K3. Teljesítmény oldal darabolása ✅ KÉSZ
+- [x] `TeljesitmenyChart.tsx` komponens kiemelése
+- [x] `EgyeniRanglista.tsx` komponens kiemelése  
+- [x] `EgyeniTrend.tsx` komponens kiemelése
+- [x] `MuszakSelector.tsx` közös komponens
+- [x] Custom hooks: `useTeljesitmenyData.ts`, `useEgyeniData.ts`
+- **Eredmény:** Komponensek szétbontva, 471 sor a page.tsx-ben
 
-### K4. Duplikált dokumentáció konszolidálása
-- [ ] `README.md` - projekt-specifikus tartalommal frissíteni
-- [ ] `SETUP_GUIDE.md` + `DATABASE_SETUP.md` + `SETUP_COMPLETE.md` → `docs/SETUP.md`
-- [ ] Gyökérből törölni a régi fájlokat
-- [ ] `.gitignore` frissítése (debug fájlok)
+### K4. Duplikált dokumentáció konszolidálása ✅ KÉSZ
+- [x] `README.md` - projekt-specifikus tartalommal frissítve
+- [x] Dokumentációk a `docs/` mappába szervezve
+- [x] Duplikált ImportStatusBar komponens egyesítve (`components/ui/ImportStatusBar.tsx`)
 
 ---
 
@@ -51,12 +50,12 @@
 | `min_valid_daily_minutes` | number | 1000 |
 | `maintenance_mode` | boolean | false |
 
-### F2. Pozíciók admin kezelése
-- [ ] `ainova_poziciok` SQL tábla létrehozása
-- [ ] `/api/admin/poziciok` API endpoint
-- [ ] Hard-coded pozíciók migrálása DB-be
-- [ ] Frontend: pozíciók listázása DB-ből
-- [ ] Kritikus pozíciók jelölése adminból
+### F2. Pozíciók admin kezelése ✅ KÉSZ
+- [x] `ainova_poziciok` SQL tábla létrehozva
+- [x] `/api/poziciok` API endpoint működik
+- [x] Hard-coded pozíciók migrálva DB-be
+- [x] Frontend: pozíciók listázása DB-ből (operátor/user modalok)
+- [x] Kategória alapú szűrés (`kihagyKategoria` query param)
 
 ### F3. RBAC middleware
 - [ ] `lib/middleware/auth.ts` - újrafelhasználható

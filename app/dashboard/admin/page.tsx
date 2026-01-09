@@ -34,7 +34,7 @@ export default function AdminPage() {
       >
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Active card */}
+            {/* Active cards */}
             <AdminMenuCard
               icon="👤"
               title="FELHASZNÁLÓK"
@@ -43,14 +43,15 @@ export default function AdminPage() {
               locked={false}
             />
             
-            {/* Locked cards */}
             <AdminMenuCard
               icon="🔧"
-              title="BEÁLLÍTÁSOK"
-              description="Rendszer konfiguráció"
-              locked={true}
+              title="OPERÁTOROK"
+              description="Operátorok, orvosi, jogosítványok"
+              href="/dashboard/admin/operatorok"
+              locked={false}
             />
             
+            {/* Locked cards */}
             <AdminMenuCard
               icon="📊"
               title="RIPORTOK"

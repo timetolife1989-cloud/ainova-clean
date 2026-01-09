@@ -7,11 +7,11 @@ import {
   KimutatType,
   ImportStatus,
   PAGE_SIZES,
-  ImportStatusBar,
   KimutatSelector,
   NapiPercesChart,
   NapiPercesTable,
 } from '@/components/napi-perces';
+import { ImportStatusBar } from '@/components/ui/ImportStatusBar';
 
 export default function NapiPercesPage() {
   // State
@@ -111,7 +111,13 @@ export default function NapiPercesPage() {
       
       <main className="p-6 pt-[90px]">
         {/* Import Status Bar */}
-        <ImportStatusBar status={importStatus} />
+        <ImportStatusBar 
+          lastImportAt={importStatus?.last_import || null}
+          recordCount={importStatus?.total_records || 0}
+          secondaryLabel="Napok"
+          secondaryValue={importStatus?.unique_days || 0}
+          secondarySuffix="nap"
+        />
 
         {/* Controls - Title + Buttons + Navigation */}
         <KimutatSelector
