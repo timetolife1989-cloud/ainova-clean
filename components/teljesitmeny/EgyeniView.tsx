@@ -12,7 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { EgyeniOperator, EgyeniTrendData, KimutatType } from './types';
+import { EgyeniOperator, EgyeniTrendData, KimutatType, PozicioTrendData } from './types';
 import { getPerformanceColorClass, getPerformanceTextColor } from './constants';
 import { MuszakBadge } from './MuszakDropdown';
 import AinovaLoader from '@/components/ui/AinovaLoader';
@@ -38,20 +38,35 @@ export function OperatorRanglista({ operatorok, onSelectOperator }: OperatorRang
     );
   }
 
+  // Hónap, hét és utolsó nap labelek az első operátorból (mind ugyanaz lesz)
+  const haviLabel = operatorok[0]?.havi_label || 'Havi';
+  const hetiLabel = operatorok[0]?.heti_label || 'Hét';
+  const utolsoNapLabel = operatorok[0]?.utolso_nap_label || 'Utolsó';
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
           <tr className="bg-slate-900/80">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">#</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Törzsszám</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Név</th>
-            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Műszak</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Pozíció</th>
-            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Munkanapok</th>
-            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Átlag %</th>
-            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Trend</th>
-            <th className="px-4 py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">Részletek</th>
+            <th className="px-2 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-8">#</th>
+            <th className="px-2 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Törzsszám / Név</th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider w-12">Műsz</th>
+            <th className="px-2 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Pozíció</th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div>Összes</div>
+              <div className="text-[10px] text-slate-500 normal-case">30 nap</div>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div>{haviLabel}</div>
+              <div className="text-[10px] text-slate-500 normal-case">hónap</div>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div>{hetiLabel}</div>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div>{utolsoNapLabel}</div>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider w-10"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700/50">
@@ -63,25 +78,76 @@ export function OperatorRanglista({ operatorok, onSelectOperator }: OperatorRang
               }`}
               onClick={() => onSelectOperator(op)}
             >
-              <td className="px-4 py-2.5 text-sm text-slate-500 font-medium">{idx + 1}.</td>
-              <td className="px-4 py-2.5 text-sm text-slate-300 font-mono">{op.torzsszam}</td>
-              <td className="px-4 py-2.5 text-sm text-white font-medium">{op.nev}</td>
-              <td className="px-4 py-2.5 text-center">
+              {/* # */}
+              <td className="px-2 py-1.5 text-sm text-slate-500 font-medium">{idx + 1}.</td>
+              
+              {/* Törzsszám / Név */}
+              <td className="px-2 py-1.5">
+                <div className="text-sm text-white font-medium">{op.nev}</div>
+                <div className="text-xs text-slate-500 font-mono">{op.torzsszam}</div>
+              </td>
+              
+              {/* Műszak */}
+              <td className="px-2 py-1.5 text-center">
                 <MuszakBadge muszak={op.muszak} />
               </td>
-              <td className="px-4 py-2.5 text-sm text-slate-400">{op.pozicio}</td>
-              <td className="px-4 py-2.5 text-center text-sm text-slate-400">{op.munkanapok} nap</td>
-              <td className="px-4 py-2.5 text-right">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${getPerformanceColorClass(op.atlag_szazalek)}`}>
+              
+              {/* Pozíció */}
+              <td className="px-2 py-1.5 text-xs text-slate-400 truncate max-w-[100px]" title={op.pozicio}>
+                {op.pozicio}
+              </td>
+              
+              {/* Összes (30 nap) */}
+              <td className="px-2 py-1.5 text-center">
+                <div className="text-xs text-slate-400">{op.munkanapok} nap</div>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${getPerformanceColorClass(op.atlag_szazalek)}`}>
                   {op.atlag_szazalek.toFixed(1)}%
                 </span>
               </td>
-              <td className="px-4 py-2.5 text-center">
-                <TrendIndicator trend={op.trend} />
+              
+              {/* Havi */}
+              <td className="px-2 py-1.5 text-center">
+                {op.havi_munkanapok > 0 ? (
+                  <>
+                    <div className="text-xs text-slate-400">{op.havi_munkanapok} nap</div>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${getPerformanceColorClass(op.havi_szazalek)}`}>
+                      {op.havi_szazalek.toFixed(1)}%
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-600">-</span>
+                )}
               </td>
-              <td className="px-4 py-2.5 text-center">
-                <button className="text-blue-400 hover:text-blue-300 transition-colors">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              
+              {/* Heti */}
+              <td className="px-2 py-1.5 text-center">
+                {op.heti_munkanapok > 0 ? (
+                  <>
+                    <div className="text-xs text-slate-400">{op.heti_munkanapok} nap</div>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${getPerformanceColorClass(op.heti_szazalek)}`}>
+                      {op.heti_szazalek.toFixed(1)}%
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-600">-</span>
+                )}
+              </td>
+              
+              {/* Utolsó nap */}
+              <td className="px-2 py-1.5 text-center">
+                {op.utolso_nap_szazalek !== null ? (
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold ${getPerformanceColorClass(op.utolso_nap_szazalek)}`}>
+                    {op.utolso_nap_szazalek.toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-600">-</span>
+                )}
+              </td>
+              
+              {/* Részletek */}
+              <td className="px-2 py-1.5 text-center">
+                <button className="text-blue-400 hover:text-blue-300 transition-colors p-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 </button>
@@ -92,25 +158,6 @@ export function OperatorRanglista({ operatorok, onSelectOperator }: OperatorRang
       </table>
     </div>
   );
-}
-
-// ============================================================================
-// Trend Indikátor
-// ============================================================================
-
-interface TrendIndicatorProps {
-  trend: 'up' | 'down' | 'stable';
-}
-
-function TrendIndicator({ trend }: TrendIndicatorProps) {
-  const className = 
-    trend === 'up' ? 'text-green-400' :
-    trend === 'down' ? 'text-red-400' :
-    'text-slate-400';
-  
-  const symbol = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '→';
-
-  return <span className={`text-xl ${className}`}>{symbol}</span>;
 }
 
 // ============================================================================
@@ -377,6 +424,261 @@ function EgyeniTrendLegend() {
       <div className="flex items-center gap-2">
         <div className="w-3 h-3 rounded-full bg-blue-500" />
         <span>Teljesítmény % (vonal)</span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Pozíció Trend View - Pozíció-szintű aggregált napi/heti/havi teljesítmény
+// ============================================================================
+
+interface PozicioTrendViewProps {
+  pozicio: string;
+  trendData: PozicioTrendData[];
+  kimutat: 'napi' | 'heti' | 'havi';
+  offset: number;
+  totalItems: number;
+  loading: boolean;
+  onKimutatChange: (kimutat: 'napi' | 'heti' | 'havi') => void;
+  onOffsetChange: (offset: number) => void;
+}
+
+export function PozicioTrendView({
+  pozicio,
+  trendData,
+  kimutat,
+  offset,
+  totalItems,
+  loading,
+  onKimutatChange,
+  onOffsetChange,
+}: PozicioTrendViewProps) {
+  const pageSize = kimutat === 'napi' ? 14 : 12;
+  const canGoBack = kimutat !== 'havi' && totalItems > offset + pageSize;
+  const canGoForward = kimutat !== 'havi' && offset > 0;
+
+  // Átlagos teljesítmény a megjelenített adatokból
+  const avgSzazalek = trendData.length > 0
+    ? trendData.reduce((sum, d) => sum + (d.szazalek || 0), 0) / trendData.length
+    : 0;
+  
+  // Átlag létszám
+  const avgLetszam = trendData.length > 0
+    ? Math.round(trendData.reduce((sum, d) => sum + (d.letszam || 0), 0) / trendData.length)
+    : 0;
+
+  return (
+    <div className="mt-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-bold text-white">📊 {pozicio} teljesítmény</h3>
+          <span className="text-slate-400 text-sm">
+            (Átlag: {avgLetszam} fő, {avgSzazalek.toFixed(1)}%)
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Napi/Heti/Havi váltó */}
+          {(['napi', 'heti', 'havi'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => onKimutatChange(k)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                kimutat === k
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              }`}
+            >
+              {k === 'napi' ? 'Napi' : k === 'heti' ? 'Heti' : 'Havi'}
+            </button>
+          ))}
+
+          {/* Navigation arrows - only for napi/heti */}
+          {kimutat !== 'havi' && (
+            <div className="flex items-center gap-1 ml-4">
+              <button
+                onClick={() => canGoBack && onOffsetChange(offset + pageSize)}
+                disabled={!canGoBack}
+                className="p-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                title="Régebbi"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span className="text-slate-400 text-xs px-2">
+                {kimutat === 'napi'
+                  ? `${Math.min(offset + 14, totalItems)} / ${totalItems} nap`
+                  : `${Math.min(offset + 12, totalItems)} / ${totalItems} hét`}
+              </span>
+              <button
+                onClick={() => canGoForward && onOffsetChange(Math.max(0, offset - pageSize))}
+                disabled={!canGoForward}
+                className="p-1.5 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                title="Újabb"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chart */}
+      {loading ? (
+        <div className="h-[280px] flex items-center justify-center">
+          <AinovaLoader />
+        </div>
+      ) : trendData.length === 0 ? (
+        <div className="h-[280px] flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-slate-500 text-4xl mb-3">📈</div>
+            <p className="text-slate-400 text-sm">Nincs trend adat ehhez a pozícióhoz</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <PozicioTrendChart data={trendData} />
+          <PozicioTrendLegend />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Pozíció Trend Chart
+// ============================================================================
+
+interface PozicioTrendChartProps {
+  data: PozicioTrendData[];
+}
+
+function PozicioTrendChart({ data }: PozicioTrendChartProps) {
+  return (
+    <ResponsiveContainer width="100%" height={280}>
+      <ComposedChart data={data} margin={{ top: 15, right: 60, left: 20, bottom: 15 }}>
+        <defs>
+          <linearGradient id="pozicioBarGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#A855F7" stopOpacity={0.95} />
+            <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.85} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+        <XAxis
+          dataKey="datum_label"
+          stroke="#9CA3AF"
+          tick={{ fill: '#9CA3AF', fontSize: 10 }}
+        />
+        <YAxis
+          yAxisId="left"
+          stroke="#9CA3AF"
+          tick={{ fill: '#9CA3AF', fontSize: 11 }}
+          tickFormatter={(value) => value.toLocaleString()}
+          label={{
+            value: 'Perc',
+            angle: -90,
+            position: 'insideLeft',
+            fill: '#9CA3AF',
+            style: { textAnchor: 'middle', fontSize: 11 },
+          }}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          stroke="#10B981"
+          tick={{ fill: '#10B981', fontSize: 11 }}
+          domain={[0, 150]}
+          tickFormatter={(value) => `${value}%`}
+          label={{
+            value: '%',
+            angle: 90,
+            position: 'insideRight',
+            fill: '#10B981',
+            style: { textAnchor: 'middle', fontSize: 11 },
+          }}
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1E293B',
+            border: '1px solid #475569',
+            borderRadius: '8px',
+            color: '#F8FAFC',
+          }}
+          formatter={(value, name) => {
+            const val = Number(value) || 0;
+            if (name === 'leadott_perc') return [`${val.toLocaleString()} perc`, 'Leadott perc'];
+            if (name === 'cel_perc') return [`${val.toLocaleString()} perc`, 'Cél perc'];
+            if (name === 'szazalek') return [`${val.toFixed(1)}%`, 'Teljesítmény'];
+            if (name === 'letszam') return [`${val} fő`, 'Létszám'];
+            return [val, name];
+          }}
+        />
+        <Legend
+          wrapperStyle={{ paddingTop: '10px' }}
+          formatter={(value) => (
+            <span className="text-slate-300 text-xs">
+              {value === 'leadott_perc' ? 'Leadott perc' :
+               value === 'cel_perc' ? 'Cél perc' :
+               value === 'szazalek' ? 'Teljesítmény %' : value}
+            </span>
+          )}
+        />
+        <Bar
+          yAxisId="left"
+          dataKey="leadott_perc"
+          name="leadott_perc"
+          fill="url(#pozicioBarGradient)"
+          stroke="#7C3AED"
+          strokeWidth={1}
+          radius={[4, 4, 0, 0]}
+        />
+        <Line
+          yAxisId="left"
+          type="monotone"
+          dataKey="cel_perc"
+          name="cel_perc"
+          stroke="#F59E0B"
+          strokeWidth={2}
+          strokeDasharray="6 3"
+          dot={false}
+        />
+        <Line
+          yAxisId="right"
+          type="monotone"
+          dataKey="szazalek"
+          name="szazalek"
+          stroke="#10B981"
+          strokeWidth={2}
+          dot={{ fill: '#10B981', strokeWidth: 0, r: 4 }}
+          activeDot={{ fill: '#34D399', strokeWidth: 0, r: 6 }}
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PozicioTrendLegend() {
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-400">
+      <div className="flex items-center gap-2">
+        <div className="w-5 h-3 rounded bg-purple-500/80" />
+        <span>Leadott perc</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div
+          className="w-5 h-0.5"
+          style={{ borderStyle: 'dashed', borderWidth: '2px', borderColor: '#F59E0B' }}
+        />
+        <span>Cél perc</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+        <span>Teljesítmény %</span>
       </div>
     </div>
   );

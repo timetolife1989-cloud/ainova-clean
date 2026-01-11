@@ -123,16 +123,17 @@ export function useTeljesitmenyData({
     }
   }, [activeKimutat, selectedMuszak, offset]);
 
-  // Fetch pozíciók
+  // Fetch pozíciók - csak produktív kategória + Megadandó
   useEffect(() => {
     const fetchPoziciok = async () => {
       try {
-        const response = await fetch('/api/poziciok');
+        // Szűrés: csak Produktív kategória + null (Megadandó)
+        const response = await fetch('/api/poziciok?onlyProduktiv=true');
         if (response.ok) {
           const result = await response.json();
           const dbPoziciok = (result.data || []).map((p: { nev: string }) => p.nev);
           if (dbPoziciok.length === 0) {
-            setPoziciok(['Mind', 'Szerelő', 'Betanított munkás', 'Gépkezelő', 'Csoportvezető']);
+            setPoziciok(['Mind', 'Előkészítő', 'Végszerelő', 'LaC szerelő', 'Csomagoló']);
           } else {
             setPoziciok(['Mind', ...dbPoziciok]);
           }
@@ -182,6 +183,12 @@ export function useTeljesitmenyData({
           cel_perc: d.cel_perc,
           leadott_perc: d.leadott_perc,
           szazalek: d.szazalek,
+          // War Room adatok
+          visszajelentes_letszam: d.visszajelentes_letszam,
+          netto_letszam: d.netto_letszam,
+          netto_cel_perc: d.netto_cel_perc,
+          netto_szazalek: d.netto_szazalek,
+          has_warroom_data: d.has_warroom_data,
         }))
       : activeKimutat === 'heti'
         ? hetiData.map(h => ({

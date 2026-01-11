@@ -17,6 +17,12 @@ export interface NapiData {
   period_start: string;
   period_end: string;
   total_days: number;
+  // War Room adatok
+  visszajelentes_letszam?: number;      // Eredeti visszajelentés létszám
+  netto_letszam?: number;               // War Room nettó létszám
+  netto_cel_perc?: number;              // Nettó létszám × 480
+  netto_szazalek?: number;              // Leadott / nettó cél × 100
+  has_warroom_data?: boolean;           // Van-e tényleges War Room adat
 }
 
 // Heti adat interface
@@ -57,10 +63,14 @@ export interface HaviData {
 export interface ChartDataItem {
   datum_label: string;
   nap_nev: string;
-  letszam: number;
+  letszam: number;                    // Visszajelentéssel rendelkező operátorok
+  netto_letszam?: number;             // War Room nettó létszám
   cel_perc: number;
+  netto_cel_perc?: number;            // Nettó létszám × 480
   leadott_perc: number;
-  szazalek: number;
+  szazalek: number;                   // Visszajelentés alapú %
+  netto_szazalek?: number;            // War Room nettó létszám alapú %
+  has_warroom_data?: boolean;         // Van-e tényleges War Room adat (nem fallback)
 }
 
 // Egyéni teljesítmény interfaces
@@ -69,9 +79,22 @@ export interface EgyeniOperator {
   nev: string;
   pozicio: string;
   muszak: string;
+  // Összes (30 nap)
   munkanapok: number;
   ossz_perc: number;
   atlag_szazalek: number;
+  // Havi (aktuális vagy előző hónap)
+  havi_munkanapok: number;
+  havi_szazalek: number;
+  havi_label: string;  // pl. "Dec"
+  // Heti (aktuális hét)
+  heti_munkanapok: number;
+  heti_szazalek: number;
+  heti_label: string;  // pl. "2. hét"
+  // Utolsó nap (legfrissebb adat dátuma)
+  utolso_nap_szazalek: number | null;
+  utolso_nap_label: string;  // pl. "Jan 9"
+  // Trend
   trend: 'up' | 'down' | 'stable';
 }
 
@@ -85,6 +108,16 @@ export interface EgyeniTrendData {
   total_days?: number;
   total_weeks?: number;
   total_months?: number;
+}
+
+// Pozíció trend interface - pozíció-szintű aggregált napi/heti teljesítmény
+export interface PozicioTrendData {
+  datum_label: string;
+  datum?: string;
+  letszam: number;              // Hány operátor dolgozott aznap
+  leadott_perc: number;         // Összes leadott perc
+  cel_perc: number;             // letszam × 480
+  szazalek: number;             // Leadott / cél × 100
 }
 
 // Import status interface

@@ -17,6 +17,7 @@ import sql from 'mssql';
 import { getPool } from '@/lib/db';
 import { checkSession, ApiErrors } from '@/lib/api-utils';
 import { DAILY_TARGET_MINUTES, MIN_VALID_DAILY_MINUTES } from '@/lib/constants';
+import { getWarRoomLetszamBatch } from '@/lib/warroom-letszam';
 
 export const runtime = 'nodejs';
 
@@ -89,6 +90,47 @@ export async function GET(request: NextRequest) {
             FROM DailyData
             ORDER BY datum ASC
           `);
+        
+        // War Room nettó létszám hozzáadása
+        if (result.recordset && result.recordset.length > 0) {
+          const datumok = result.recordset.map((r: { datum: Date }) => {
+            const d = new Date(r.datum);
+            return d.toISOString().split('T')[0];
+          });
+          
+          console.log('[WarRoom API] Datumok:', JSON.stringify(datumok), 'muszak:', muszakFilter);
+          
+          const muszakForWarRoom = (muszakFilter === 'SUM' || !muszakFilter) ? 'SUM' : muszakFilter as 'A' | 'B' | 'C';
+          const warRoomLetszam = await getWarRoomLetszamBatch(muszakForWarRoom, datumok);
+          console.log('[WarRoom API] Batch result:', JSON.stringify(Array.from(warRoomLetszam.entries())));
+          
+          // Netto létszám hozzáadása és % újraszámolása
+          const enrichedRecords = result.recordset.map((row: { 
+            datum: Date; 
+            letszam: number; 
+            leadott_perc: number;
+            szazalek: number;
+            cel_perc: number;
+          }) => {
+            const datumStr = new Date(row.datum).toISOString().split('T')[0];
+            const warRoomValue = warRoomLetszam.get(datumStr);
+            const hasWarRoomData = warRoomValue !== undefined && warRoomValue > 0;
+            const nettoLetszam = hasWarRoomData ? warRoomValue : row.letszam;
+            const nettoCelPerc = nettoLetszam * DAILY_TARGET_MINUTES;
+            const nettoSzazalek = nettoCelPerc > 0 ? (row.leadott_perc / nettoCelPerc) * 100 : 0;
+            
+            return {
+              ...row,
+              visszajelentes_letszam: row.letszam,  // Eredeti: visszajelentéssel rendelkezők
+              netto_letszam: nettoLetszam,          // War Room: tényleges produktív létszám
+              netto_cel_perc: nettoCelPerc,         // Nettó létszám × 480
+              netto_szazalek: nettoSzazalek,        // Leadott / nettó cél × 100
+              has_warroom_data: hasWarRoomData,     // Van-e tényleges War Room adat?
+            };
+          });
+          // @ts-expect-error - enriched records extend original type
+          result.recordset = enrichedRecords;
+        }
         break;
 
       case 'heti-kimutatas':
@@ -259,6 +301,8 @@ export async function GET(request: NextRequest) {
       case 'egyeni-ranglista':
         // Egyéni teljesítmény ranglista - UTOLSÓ 30 NAP az adatbázisban
         // Operátoronként: 480 perc = 100%
+        // Kompakt layout: összes/havi/heti/utolsó nap bontás
+        // FONTOS: Ugyanaz a szűrés mint a produktívnál - min perc/nap!
         const ranglistaMuszak = searchParams.get('muszak') || 'SUM';
         const ranglistaPozicio = searchParams.get('pozicio');
         const ranglistaSearch = searchParams.get('search');
@@ -270,72 +314,86 @@ export async function GET(request: NextRequest) {
           .input('pozicioFilter', sql.NVarChar, ranglistaPozicio || '')
           .input('searchFilter', sql.NVarChar, ranglistaSearch ? `%${ranglistaSearch}%` : '')
           .input('targetMinutes', sql.Int, DAILY_TARGET_MINUTES)
+          .input('minDailyMinutes', sql.Int, MIN_VALID_DAILY_MINUTES)
           .query(`
-            -- Az adatbázisban lévő legutolsó dátum és 30 nappal korábbi
-            DECLARE @MaxDatum DATE = (SELECT MAX(datum) FROM ainova_teljesitmeny);
-            DECLARE @MinDatum DATE = DATEADD(DAY, -30, @MaxDatum);
-            
-            -- Operátor statisztikák az utolsó 30 napban
-            WITH OperatorStats AS (
-              SELECT 
-                t.torzsszam,
-                MAX(t.nev) AS nev,
-                MAX(t.muszak) AS muszak,
-                COALESCE(MAX(o.pozicio), 'Operátor') AS pozicio,
-                SUM(t.leadott_perc) AS ossz_perc,
-                COUNT(*) AS munkanapok,
-                -- Egyéni teljesítmény: leadott / (munkanapok * 480) * 100
-                CAST(SUM(t.leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100 AS atlag_szazalek
-              FROM ainova_teljesitmeny t
-              LEFT JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
-              WHERE t.datum >= @MinDatum
-                AND t.datum <= @MaxDatum
-                AND (@isSUM = 1 OR t.muszak = @muszakFilter)
-                AND (@pozicioFilter = '' OR o.pozicio = @pozicioFilter)
-                AND (@searchFilter = '' OR t.torzsszam LIKE @searchFilter OR t.nev LIKE @searchFilter)
-              GROUP BY t.torzsszam
-              HAVING COUNT(*) >= 1  -- Legalább 1 munkanap elég
+            -- Érvényes napok szűrése (ugyanaz mint a produktívnál)
+            -- Mai nap kihagyása + min perc szűrés (SAP csúszás kiszűrése)
+            WITH ValidDays AS (
+              SELECT datum
+              FROM ainova_teljesitmeny
+              WHERE datum < CAST(GETDATE() AS DATE)
+              GROUP BY datum
+              HAVING SUM(leadott_perc) >= @minDailyMinutes
             ),
-            TrendCalc AS (
+            Params AS (
               SELECT 
-                s.torzsszam,
-                s.nev,
-                s.muszak,
-                s.pozicio,
-                s.ossz_perc,
-                s.munkanapok,
-                s.atlag_szazalek,
-                @MinDatum AS period_start,
-                @MaxDatum AS period_end,
-                -- Trend: utolsó 7 nap vs előző 7 nap (az adatbázis max dátumától visszafelé)
+                (SELECT MAX(datum) FROM ValidDays) AS MaxDatum,
+                DATEADD(DAY, -30, (SELECT MAX(datum) FROM ValidDays)) AS MinDatum,
+                DATEPART(ISO_WEEK, (SELECT MAX(datum) FROM ValidDays)) AS HetSzam,
+                -- ISO hét év (helyes év a hét számhoz)
                 CASE 
-                  WHEN (SELECT CAST(SUM(leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100
-                        FROM ainova_teljesitmeny 
-                        WHERE torzsszam = s.torzsszam 
-                        AND datum >= DATEADD(DAY, -7, @MaxDatum)
-                        AND datum <= @MaxDatum) 
-                     > (SELECT CAST(SUM(leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100
-                        FROM ainova_teljesitmeny 
-                        WHERE torzsszam = s.torzsszam 
-                        AND datum >= DATEADD(DAY, -14, @MaxDatum)
-                        AND datum < DATEADD(DAY, -7, @MaxDatum)) + 2
-                  THEN 'up'
-                  WHEN (SELECT CAST(SUM(leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100
-                        FROM ainova_teljesitmeny 
-                        WHERE torzsszam = s.torzsszam 
-                        AND datum >= DATEADD(DAY, -7, @MaxDatum)
-                        AND datum <= @MaxDatum) 
-                     < (SELECT CAST(SUM(leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100
-                        FROM ainova_teljesitmeny 
-                        WHERE torzsszam = s.torzsszam 
-                        AND datum >= DATEADD(DAY, -14, @MaxDatum)
-                        AND datum < DATEADD(DAY, -7, @MaxDatum)) - 2
-                  THEN 'down'
-                  ELSE 'stable'
-                END AS trend
-              FROM OperatorStats s
+                  WHEN DATEPART(ISO_WEEK, (SELECT MAX(datum) FROM ValidDays)) = 1 
+                       AND MONTH((SELECT MAX(datum) FROM ValidDays)) = 12 
+                  THEN YEAR((SELECT MAX(datum) FROM ValidDays)) + 1
+                  WHEN DATEPART(ISO_WEEK, (SELECT MAX(datum) FROM ValidDays)) >= 52 
+                       AND MONTH((SELECT MAX(datum) FROM ValidDays)) = 1 
+                  THEN YEAR((SELECT MAX(datum) FROM ValidDays)) - 1
+                  ELSE YEAR((SELECT MAX(datum) FROM ValidDays))
+                END AS IsoEv,
+                DATEADD(DAY, 1-DATEPART(WEEKDAY, (SELECT MAX(datum) FROM ValidDays)), (SELECT MAX(datum) FROM ValidDays)) AS HetEleje,
+                DATEFROMPARTS(YEAR((SELECT MAX(datum) FROM ValidDays)), MONTH((SELECT MAX(datum) FROM ValidDays)), 1) AS HonapEleje,
+                MONTH((SELECT MAX(datum) FROM ValidDays)) AS HonapSzam
             )
-            SELECT * FROM TrendCalc
+            SELECT 
+              p.MaxDatum AS _maxDatum,
+              t.torzsszam,
+              MAX(t.nev) AS nev,
+              MAX(t.muszak) AS muszak,
+              COALESCE(MAX(o.pozicio), 'Operator') AS pozicio,
+              SUM(t.leadott_perc) AS ossz_perc,
+              COUNT(*) AS munkanapok,
+              CAST(SUM(t.leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100 AS atlag_szazalek,
+              -- Havi stats - csak érvényes napok
+              (SELECT COUNT(*) FROM ainova_teljesitmeny sub 
+               INNER JOIN ValidDays v ON sub.datum = v.datum
+               WHERE sub.torzsszam = t.torzsszam AND sub.datum >= p.HonapEleje) AS havi_munkanapok,
+              (SELECT CAST(SUM(sub.leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100 
+               FROM ainova_teljesitmeny sub
+               INNER JOIN ValidDays v ON sub.datum = v.datum
+               WHERE sub.torzsszam = t.torzsszam AND sub.datum >= p.HonapEleje) AS havi_szazalek,
+              CASE p.HonapSzam WHEN 1 THEN 'Jan' WHEN 2 THEN 'Feb' WHEN 3 THEN 'Mar' WHEN 4 THEN 'Apr' 
+                WHEN 5 THEN 'Maj' WHEN 6 THEN 'Jun' WHEN 7 THEN 'Jul' WHEN 8 THEN 'Aug' 
+                WHEN 9 THEN 'Szep' WHEN 10 THEN 'Okt' WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dec' END AS havi_label,
+              -- Heti stats - csak érvényes napok
+              (SELECT COUNT(*) FROM ainova_teljesitmeny sub
+               INNER JOIN ValidDays v ON sub.datum = v.datum
+               WHERE sub.torzsszam = t.torzsszam AND sub.datum >= p.HetEleje AND sub.datum <= p.MaxDatum) AS heti_munkanapok,
+              (SELECT CAST(SUM(sub.leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100 
+               FROM ainova_teljesitmeny sub
+               INNER JOIN ValidDays v ON sub.datum = v.datum
+               WHERE sub.torzsszam = t.torzsszam AND sub.datum >= p.HetEleje AND sub.datum <= p.MaxDatum) AS heti_szazalek,
+              CAST(p.IsoEv AS NVARCHAR(4)) + '/' + RIGHT('0' + CAST(p.HetSzam AS NVARCHAR(2)), 2) AS heti_label,
+              -- Utolsó ÉRVÉNYES nap - az adott operátor dolgozott-e aznap
+              (SELECT CAST(leadott_perc AS FLOAT) / @targetMinutes * 100 
+               FROM ainova_teljesitmeny WHERE torzsszam = t.torzsszam AND datum = p.MaxDatum) AS utolso_nap_szazalek,
+              -- Utolsó nap label (pl. "Jan 9")
+              CASE MONTH(p.MaxDatum) WHEN 1 THEN 'Jan' WHEN 2 THEN 'Feb' WHEN 3 THEN 'Mar' WHEN 4 THEN 'Apr' 
+                WHEN 5 THEN 'Maj' WHEN 6 THEN 'Jun' WHEN 7 THEN 'Jul' WHEN 8 THEN 'Aug' 
+                WHEN 9 THEN 'Szep' WHEN 10 THEN 'Okt' WHEN 11 THEN 'Nov' WHEN 12 THEN 'Dec' END 
+                + ' ' + CAST(DAY(p.MaxDatum) AS NVARCHAR(2)) AS utolso_nap_label,
+              -- Trend (csak érvényes napokból)
+              'stable' AS trend
+            FROM ainova_teljesitmeny t
+            INNER JOIN ValidDays vd ON t.datum = vd.datum
+            LEFT JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+            CROSS JOIN Params p
+            WHERE t.datum >= p.MinDatum
+              AND t.datum <= p.MaxDatum
+              AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              AND (@pozicioFilter = '' OR o.pozicio = @pozicioFilter)
+              AND (@searchFilter = '' OR t.torzsszam LIKE @searchFilter OR t.nev LIKE @searchFilter)
+            GROUP BY t.torzsszam, p.MaxDatum, p.MinDatum, p.HetSzam, p.IsoEv, p.HetEleje, p.HonapEleje, p.HonapSzam
+            HAVING COUNT(*) >= 1
             ORDER BY atlag_szazalek DESC
           `);
         break;
@@ -394,6 +452,8 @@ export async function GET(request: NextRequest) {
             `);
         } else if (trendKimutat === 'heti') {
           // Heti bontás: 12 hét, lapozható
+          // ISO hét év: ha a hét 1 és a hónap december, akkor következő év
+          //             ha a hét 52/53 és a hónap január, akkor előző év
           const hetiPageSize = 12;
           result = await pool.request()
             .input('torzsszam', sql.NVarChar, trendTorzsszam)
@@ -404,39 +464,58 @@ export async function GET(request: NextRequest) {
               -- Mai napot kihagyjuk
               DECLARE @Yesterday DATE = DATEADD(DAY, -1, CAST(GETDATE() AS DATE));
               
+              -- ISO hét év számítás (helyes év a hét számhoz)
               -- Összes hét az operátornak
               WITH AllWeeks AS (
                 SELECT DISTINCT 
-                  DATEPART(YEAR, datum) AS ev, 
-                  DATEPART(ISO_WEEK, datum) AS het
+                  CASE 
+                    WHEN DATEPART(ISO_WEEK, datum) = 1 AND DATEPART(MONTH, datum) = 12 THEN DATEPART(YEAR, datum) + 1
+                    WHEN DATEPART(ISO_WEEK, datum) >= 52 AND DATEPART(MONTH, datum) = 1 THEN DATEPART(YEAR, datum) - 1
+                    ELSE DATEPART(YEAR, datum)
+                  END AS iso_ev, 
+                  DATEPART(ISO_WEEK, datum) AS het,
+                  MIN(datum) AS het_elso_nap
                 FROM ainova_teljesitmeny
                 WHERE torzsszam = @torzsszam AND datum <= @Yesterday
+                GROUP BY 
+                  CASE 
+                    WHEN DATEPART(ISO_WEEK, datum) = 1 AND DATEPART(MONTH, datum) = 12 THEN DATEPART(YEAR, datum) + 1
+                    WHEN DATEPART(ISO_WEEK, datum) >= 52 AND DATEPART(MONTH, datum) = 1 THEN DATEPART(YEAR, datum) - 1
+                    ELSE DATEPART(YEAR, datum)
+                  END,
+                  DATEPART(ISO_WEEK, datum)
               ),
               TotalWeeks AS (
                 SELECT COUNT(*) AS cnt FROM AllWeeks
               ),
               WeekRange AS (
-                SELECT ev, het, ROW_NUMBER() OVER (ORDER BY ev DESC, het DESC) AS rn
+                SELECT iso_ev, het, het_elso_nap, ROW_NUMBER() OVER (ORDER BY het_elso_nap DESC) AS rn
                 FROM AllWeeks
               ),
               SelectedWeeks AS (
-                SELECT ev, het FROM WeekRange
+                SELECT iso_ev, het FROM WeekRange
                 WHERE rn > @offset AND rn <= @offset + @pageSize
               )
               SELECT 
-                CAST(DATEPART(YEAR, t.datum) AS VARCHAR) + '/' + RIGHT('0' + CAST(DATEPART(ISO_WEEK, t.datum) AS VARCHAR), 2) AS datum_label,
-                DATEPART(YEAR, t.datum) AS ev,
-                DATEPART(ISO_WEEK, t.datum) AS het,
+                CAST(sw.iso_ev AS VARCHAR) + '/' + RIGHT('0' + CAST(sw.het AS VARCHAR), 2) AS datum_label,
+                sw.iso_ev AS ev,
+                sw.het,
                 COUNT(*) AS munkanapok,
                 SUM(t.leadott_perc) AS leadott_perc,
                 COUNT(*) * @targetMinutes AS cel_perc,
                 CAST(SUM(t.leadott_perc) AS FLOAT) / NULLIF(COUNT(*) * @targetMinutes, 0) * 100 AS szazalek,
                 (SELECT cnt FROM TotalWeeks) AS total_weeks
               FROM ainova_teljesitmeny t
-              INNER JOIN SelectedWeeks sw ON DATEPART(YEAR, t.datum) = sw.ev AND DATEPART(ISO_WEEK, t.datum) = sw.het
+              INNER JOIN SelectedWeeks sw ON 
+                CASE 
+                  WHEN DATEPART(ISO_WEEK, t.datum) = 1 AND DATEPART(MONTH, t.datum) = 12 THEN DATEPART(YEAR, t.datum) + 1
+                  WHEN DATEPART(ISO_WEEK, t.datum) >= 52 AND DATEPART(MONTH, t.datum) = 1 THEN DATEPART(YEAR, t.datum) - 1
+                  ELSE DATEPART(YEAR, t.datum)
+                END = sw.iso_ev 
+                AND DATEPART(ISO_WEEK, t.datum) = sw.het
               WHERE t.torzsszam = @torzsszam AND t.datum <= @Yesterday
-              GROUP BY DATEPART(YEAR, t.datum), DATEPART(ISO_WEEK, t.datum)
-              ORDER BY DATEPART(YEAR, t.datum) ASC, DATEPART(ISO_WEEK, t.datum) ASC
+              GROUP BY sw.iso_ev, sw.het
+              ORDER BY sw.iso_ev ASC, sw.het ASC
             `);
         } else {
           // Havi bontás: 12 hónap, NINCS lapozás
@@ -477,8 +556,234 @@ export async function GET(request: NextRequest) {
         }
         break;
 
+      case 'pozicio-trend':
+        // Pozíció-szintű trend: napi vagy heti bontás egy adott pozícióhoz
+        // Műszak szerint szűrhető (A, B, C vagy SUM)
+        const pozicioTrendPozicio = searchParams.get('pozicio');
+        const pozicioTrendMuszak = searchParams.get('muszak') || 'SUM';
+        const pozicioTrendKimutat = searchParams.get('kimutat') || 'napi';
+        const pozicioTrendOffset = parseInt(searchParams.get('offset') || '0');
+        const isPozicioSUM = pozicioTrendMuszak === 'SUM';
+        
+        if (!pozicioTrendPozicio) {
+          return ApiErrors.badRequest('pozicio paraméter kötelező');
+        }
+        
+        if (pozicioTrendKimutat === 'napi') {
+          // Napi bontás: 14 nap
+          result = await pool.request()
+            .input('pozicio', sql.NVarChar, pozicioTrendPozicio)
+            .input('muszakFilter', sql.NVarChar, pozicioTrendMuszak)
+            .input('isSUM', sql.Bit, isPozicioSUM ? 1 : 0)
+            .input('offset', sql.Int, pozicioTrendOffset)
+            .input('pageSize', sql.Int, 14)
+            .input('targetMinutes', sql.Int, DAILY_TARGET_MINUTES)
+            .input('minDailyMinutes', sql.Int, MIN_VALID_DAILY_MINUTES)
+            .query(`
+              WITH ValidDays AS (
+                SELECT datum
+                FROM ainova_teljesitmeny
+                WHERE datum < CAST(GETDATE() AS DATE)
+                GROUP BY datum
+                HAVING SUM(leadott_perc) >= @minDailyMinutes
+              ),
+              DateRange AS (
+                SELECT DISTINCT t.datum
+                FROM ainova_teljesitmeny t
+                INNER JOIN ValidDays v ON t.datum = v.datum
+                INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+                WHERE o.pozicio = @pozicio
+                  AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+                ORDER BY t.datum DESC
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+              ),
+              TotalDays AS (
+                SELECT COUNT(DISTINCT t.datum) as cnt
+                FROM ainova_teljesitmeny t
+                INNER JOIN ValidDays v ON t.datum = v.datum
+                INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+                WHERE o.pozicio = @pozicio
+                  AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              )
+              SELECT 
+                FORMAT(t.datum, 'MM.dd', 'hu-HU') AS datum_label,
+                t.datum,
+                COUNT(DISTINCT t.torzsszam) AS letszam,
+                SUM(t.leadott_perc) AS leadott_perc,
+                COUNT(DISTINCT t.torzsszam) * @targetMinutes AS cel_perc,
+                CAST(SUM(t.leadott_perc) AS FLOAT) / NULLIF(COUNT(DISTINCT t.torzsszam) * @targetMinutes, 0) * 100 AS szazalek,
+                (SELECT cnt FROM TotalDays) AS total_days
+              FROM ainova_teljesitmeny t
+              INNER JOIN DateRange dr ON t.datum = dr.datum
+              INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+              WHERE o.pozicio = @pozicio
+                AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              GROUP BY t.datum
+              ORDER BY t.datum ASC
+            `);
+        } else if (pozicioTrendKimutat === 'heti') {
+          // Heti bontás: 12 hét
+          result = await pool.request()
+            .input('pozicio', sql.NVarChar, pozicioTrendPozicio)
+            .input('muszakFilter', sql.NVarChar, pozicioTrendMuszak)
+            .input('isSUM', sql.Bit, isPozicioSUM ? 1 : 0)
+            .input('offset', sql.Int, pozicioTrendOffset)
+            .input('pageSize', sql.Int, 12)
+            .input('targetMinutes', sql.Int, DAILY_TARGET_MINUTES)
+            .input('minDailyMinutes', sql.Int, MIN_VALID_DAILY_MINUTES)
+            .query(`
+              WITH ValidDays AS (
+                SELECT datum
+                FROM ainova_teljesitmeny
+                WHERE datum < CAST(GETDATE() AS DATE)
+                GROUP BY datum
+                HAVING SUM(leadott_perc) >= @minDailyMinutes
+              ),
+              WeekRange AS (
+                SELECT DISTINCT 
+                  CASE 
+                    WHEN DATEPART(ISO_WEEK, t.datum) = 1 AND DATEPART(MONTH, t.datum) = 12 THEN DATEPART(YEAR, t.datum) + 1
+                    WHEN DATEPART(ISO_WEEK, t.datum) >= 52 AND DATEPART(MONTH, t.datum) = 1 THEN DATEPART(YEAR, t.datum) - 1
+                    ELSE DATEPART(YEAR, t.datum)
+                  END AS iso_ev,
+                  DATEPART(ISO_WEEK, t.datum) AS het,
+                  MIN(t.datum) AS het_elso_nap
+                FROM ainova_teljesitmeny t
+                INNER JOIN ValidDays v ON t.datum = v.datum
+                INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+                WHERE o.pozicio = @pozicio
+                  AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+                GROUP BY 
+                  CASE 
+                    WHEN DATEPART(ISO_WEEK, t.datum) = 1 AND DATEPART(MONTH, t.datum) = 12 THEN DATEPART(YEAR, t.datum) + 1
+                    WHEN DATEPART(ISO_WEEK, t.datum) >= 52 AND DATEPART(MONTH, t.datum) = 1 THEN DATEPART(YEAR, t.datum) - 1
+                    ELSE DATEPART(YEAR, t.datum)
+                  END,
+                  DATEPART(ISO_WEEK, t.datum)
+                ORDER BY het_elso_nap DESC
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+              ),
+              TotalWeeks AS (
+                SELECT COUNT(DISTINCT CAST(
+                  CASE 
+                    WHEN DATEPART(ISO_WEEK, t.datum) = 1 AND DATEPART(MONTH, t.datum) = 12 THEN DATEPART(YEAR, t.datum) + 1
+                    WHEN DATEPART(ISO_WEEK, t.datum) >= 52 AND DATEPART(MONTH, t.datum) = 1 THEN DATEPART(YEAR, t.datum) - 1
+                    ELSE DATEPART(YEAR, t.datum)
+                  END AS VARCHAR) + '-' + CAST(DATEPART(ISO_WEEK, t.datum) AS VARCHAR)) as cnt
+                FROM ainova_teljesitmeny t
+                INNER JOIN ValidDays v ON t.datum = v.datum
+                INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+                WHERE o.pozicio = @pozicio
+                  AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              )
+              SELECT 
+                CAST(wr.iso_ev AS VARCHAR) + '/' + RIGHT('0' + CAST(wr.het AS VARCHAR), 2) AS datum_label,
+                wr.iso_ev AS ev,
+                wr.het,
+                COUNT(DISTINCT t.torzsszam) AS letszam,
+                SUM(t.leadott_perc) AS leadott_perc,
+                -- Heti: napi átlag létszám × napok × 480 (összes munkanap)
+                COUNT(DISTINCT t.datum) * (SELECT COUNT(DISTINCT sub.torzsszam) FROM ainova_teljesitmeny sub 
+                  INNER JOIN ainova_operatorok so ON sub.torzsszam = so.torzsszam
+                  WHERE so.pozicio = @pozicio 
+                    AND (@isSUM = 1 OR sub.muszak = @muszakFilter)
+                    AND CASE 
+                      WHEN DATEPART(ISO_WEEK, sub.datum) = 1 AND DATEPART(MONTH, sub.datum) = 12 THEN DATEPART(YEAR, sub.datum) + 1
+                      WHEN DATEPART(ISO_WEEK, sub.datum) >= 52 AND DATEPART(MONTH, sub.datum) = 1 THEN DATEPART(YEAR, sub.datum) - 1
+                      ELSE DATEPART(YEAR, sub.datum)
+                    END = wr.iso_ev AND DATEPART(ISO_WEEK, sub.datum) = wr.het
+                ) / NULLIF(COUNT(DISTINCT t.datum), 0) * COUNT(DISTINCT t.datum) * @targetMinutes AS cel_perc,
+                CAST(SUM(t.leadott_perc) AS FLOAT) / 
+                  NULLIF(COUNT(DISTINCT t.datum) * (SELECT COUNT(DISTINCT sub.torzsszam) FROM ainova_teljesitmeny sub 
+                    INNER JOIN ainova_operatorok so ON sub.torzsszam = so.torzsszam
+                    WHERE so.pozicio = @pozicio 
+                      AND (@isSUM = 1 OR sub.muszak = @muszakFilter)
+                      AND CASE 
+                        WHEN DATEPART(ISO_WEEK, sub.datum) = 1 AND DATEPART(MONTH, sub.datum) = 12 THEN DATEPART(YEAR, sub.datum) + 1
+                        WHEN DATEPART(ISO_WEEK, sub.datum) >= 52 AND DATEPART(MONTH, sub.datum) = 1 THEN DATEPART(YEAR, sub.datum) - 1
+                        ELSE DATEPART(YEAR, sub.datum)
+                      END = wr.iso_ev AND DATEPART(ISO_WEEK, sub.datum) = wr.het
+                  ) / NULLIF(COUNT(DISTINCT t.datum), 0) * COUNT(DISTINCT t.datum) * @targetMinutes, 0) * 100 AS szazalek,
+                (SELECT cnt FROM TotalWeeks) AS total_weeks
+              FROM ainova_teljesitmeny t
+              INNER JOIN WeekRange wr ON 
+                CASE 
+                  WHEN DATEPART(ISO_WEEK, t.datum) = 1 AND DATEPART(MONTH, t.datum) = 12 THEN DATEPART(YEAR, t.datum) + 1
+                  WHEN DATEPART(ISO_WEEK, t.datum) >= 52 AND DATEPART(MONTH, t.datum) = 1 THEN DATEPART(YEAR, t.datum) - 1
+                  ELSE DATEPART(YEAR, t.datum)
+                END = wr.iso_ev 
+                AND DATEPART(ISO_WEEK, t.datum) = wr.het
+              INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+              WHERE o.pozicio = @pozicio
+                AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              GROUP BY wr.iso_ev, wr.het
+              ORDER BY wr.iso_ev ASC, wr.het ASC
+            `);
+        } else {
+          // Havi bontás: utolsó 12 hónap
+          result = await pool.request()
+            .input('pozicio', sql.NVarChar, pozicioTrendPozicio)
+            .input('muszakFilter', sql.NVarChar, pozicioTrendMuszak)
+            .input('isSUM', sql.Bit, isPozicioSUM ? 1 : 0)
+            .input('targetMinutes', sql.Int, DAILY_TARGET_MINUTES)
+            .input('minDailyMinutes', sql.Int, MIN_VALID_DAILY_MINUTES)
+            .query(`
+              WITH ValidDays AS (
+                SELECT datum
+                FROM ainova_teljesitmeny
+                WHERE datum < CAST(GETDATE() AS DATE)
+                GROUP BY datum
+                HAVING SUM(leadott_perc) >= @minDailyMinutes
+              ),
+              MonthRange AS (
+                SELECT DISTINCT 
+                  YEAR(t.datum) AS ev,
+                  MONTH(t.datum) AS honap,
+                  MIN(t.datum) AS honap_elso_nap
+                FROM ainova_teljesitmeny t
+                INNER JOIN ValidDays v ON t.datum = v.datum
+                INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+                WHERE o.pozicio = @pozicio
+                  AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+                GROUP BY YEAR(t.datum), MONTH(t.datum)
+              ),
+              TotalMonths AS (
+                SELECT COUNT(*) as cnt FROM MonthRange
+              )
+              SELECT 
+                CAST(mr.ev AS VARCHAR) + '/' + RIGHT('0' + CAST(mr.honap AS VARCHAR), 2) AS datum_label,
+                mr.ev,
+                mr.honap,
+                COUNT(DISTINCT t.torzsszam) AS letszam,
+                SUM(t.leadott_perc) AS leadott_perc,
+                -- Havi: napi átlag létszám × napok × 480
+                COUNT(DISTINCT t.datum) * (SELECT COUNT(DISTINCT sub.torzsszam) FROM ainova_teljesitmeny sub 
+                  INNER JOIN ainova_operatorok so ON sub.torzsszam = so.torzsszam
+                  WHERE so.pozicio = @pozicio 
+                    AND (@isSUM = 1 OR sub.muszak = @muszakFilter)
+                    AND YEAR(sub.datum) = mr.ev AND MONTH(sub.datum) = mr.honap
+                ) / NULLIF(COUNT(DISTINCT t.datum), 0) * COUNT(DISTINCT t.datum) * @targetMinutes AS cel_perc,
+                CAST(SUM(t.leadott_perc) AS FLOAT) / 
+                  NULLIF(COUNT(DISTINCT t.datum) * (SELECT COUNT(DISTINCT sub.torzsszam) FROM ainova_teljesitmeny sub 
+                    INNER JOIN ainova_operatorok so ON sub.torzsszam = so.torzsszam
+                    WHERE so.pozicio = @pozicio 
+                      AND (@isSUM = 1 OR sub.muszak = @muszakFilter)
+                      AND YEAR(sub.datum) = mr.ev AND MONTH(sub.datum) = mr.honap
+                  ) / NULLIF(COUNT(DISTINCT t.datum), 0) * COUNT(DISTINCT t.datum) * @targetMinutes, 0) * 100 AS szazalek,
+                (SELECT cnt FROM TotalMonths) AS total_months
+              FROM ainova_teljesitmeny t
+              INNER JOIN MonthRange mr ON YEAR(t.datum) = mr.ev AND MONTH(t.datum) = mr.honap
+              INNER JOIN ainova_operatorok o ON t.torzsszam = o.torzsszam
+              WHERE o.pozicio = @pozicio
+                AND (@isSUM = 1 OR t.muszak = @muszakFilter)
+              GROUP BY mr.ev, mr.honap
+              ORDER BY mr.ev ASC, mr.honap ASC
+            `);
+        }
+        break;
+
       default:
-        return ApiErrors.badRequest('Érvénytelen type paraméter. Érvényes: napi-kimutatas, heti-kimutatas, havi-kimutatas, egyeni-ranglista, egyeni-trend');
+        return ApiErrors.badRequest('Érvénytelen type paraméter. Érvényes: napi-kimutatas, heti-kimutatas, havi-kimutatas, egyeni-ranglista, egyeni-trend, pozicio-trend');
     }
 
     return NextResponse.json({

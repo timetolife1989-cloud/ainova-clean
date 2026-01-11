@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EgyeniOperator, EgyeniTrendData, KimutatType, MuszakType } from './types';
+import { EgyeniOperator, EgyeniTrendData, KimutatType, MuszakType, PozicioTrendData } from './types';
 
 interface UseEgyeniDataParams {
   isActive: boolean;
@@ -123,6 +123,83 @@ export function useEgyeniTrend({
 
     fetchTrend();
   }, [operator, kimutat, offset]);
+
+  return { trendData, totalItems, loading };
+}
+
+// ============================================================================
+// Pozíció Trend Hook - pozíció-szintű aggregált napi/heti teljesítmény
+// ============================================================================
+
+interface UsePozicioTrendParams {
+  pozicio: string;
+  muszak: MuszakType;
+  kimutat: 'napi' | 'heti' | 'havi';
+  offset: number;
+  isActive: boolean;
+}
+
+interface UsePozicioTrendReturn {
+  trendData: PozicioTrendData[];
+  totalItems: number;
+  loading: boolean;
+}
+
+export function usePozicioTrend({
+  pozicio,
+  muszak,
+  kimutat,
+  offset,
+  isActive,
+}: UsePozicioTrendParams): UsePozicioTrendReturn {
+  const [trendData, setTrendData] = useState<PozicioTrendData[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Csak akkor töltünk, ha aktív és van pozíció (és nem "Mind")
+    if (!isActive || !pozicio || pozicio === 'Mind') {
+      setTrendData([]);
+      setTotalItems(0);
+      return;
+    }
+
+    const fetchTrend = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          type: 'pozicio-trend',
+          pozicio: pozicio,
+          muszak: muszak,
+          kimutat: kimutat,
+          offset: offset.toString(),
+        });
+
+        const response = await fetch(`/api/teljesitmeny?${params.toString()}`);
+        if (response.ok) {
+          const result = await response.json();
+          const items = result.data || [];
+          setTrendData(items);
+          
+          if (items.length > 0) {
+            if (kimutat === 'napi') {
+              setTotalItems(items[0].total_days || 0);
+            } else if (kimutat === 'heti') {
+              setTotalItems(items[0].total_weeks || 0);
+            } else {
+              setTotalItems(items[0].total_months || 0);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Hiba a pozíció trend betöltésekor:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrend();
+  }, [isActive, pozicio, muszak, kimutat, offset]);
 
   return { trendData, totalItems, loading };
 }

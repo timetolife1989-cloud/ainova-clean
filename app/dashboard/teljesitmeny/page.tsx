@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Header from '@/components/dashboard/Header';
 import AinovaLoader from '@/components/ui/AinovaLoader';
 import { ImportStatusBar } from '@/components/ui/ImportStatusBar';
+import { WarRoomSyncAlert } from '@/components/teljesitmeny/WarRoomSyncAlert';
 import {
   // Types
   MuszakType,
@@ -15,6 +16,7 @@ import {
   useTeljesitmenyData,
   useEgyeniOperatorok,
   useEgyeniTrend,
+  usePozicioTrend,
   // Constants
   MUSZAK_COLORS,
   PAGINATION,
@@ -27,6 +29,7 @@ import {
   TeljesitmenyTable,
   OperatorRanglista,
   EgyeniTrendView,
+  PozicioTrendView,
 } from '@/components/teljesitmeny';
 
 export default function TeljesitmenyPage() {
@@ -53,6 +56,10 @@ export default function TeljesitmenyPage() {
   const [egyeniKimutat, setEgyeniKimutat] = useState<KimutatType>('napi');
   const [egyeniOffset, setEgyeniOffset] = useState(0);
   const [openEgyeniDropdown, setOpenEgyeniDropdown] = useState<'pozicio' | null>(null);
+
+  // Pozíció trend state
+  const [pozicioKimutat, setPozicioKimutat] = useState<'napi' | 'heti' | 'havi'>('napi');
+  const [pozicioOffset, setPozicioOffset] = useState(0);
 
   // ============================================================================
   // Refs
@@ -92,6 +99,15 @@ export default function TeljesitmenyPage() {
     operator: selectedOperator,
     kimutat: egyeniKimutat,
     offset: egyeniOffset,
+  });
+
+  // Pozíció trend hook - csak ha van kiválasztott pozíció és nincs operátor kiválasztva
+  const { trendData: pozicioTrendData, totalItems: pozicioTotalItems, loading: pozicioTrendLoading } = usePozicioTrend({
+    pozicio: egyeniPozicio,
+    muszak: egyeniMuszak,
+    kimutat: pozicioKimutat,
+    offset: pozicioOffset,
+    isActive: activeView === 'egyeni' && egyeniPozicio !== 'Mind' && !selectedOperator,
   });
 
   // ============================================================================
@@ -203,15 +219,20 @@ export default function TeljesitmenyPage() {
           />
         )}
 
-        {/* Top Controls */}
-        <div className="flex items-start gap-8 mb-4">
+        {/* War Room Sync Alert */}
+        <div className="mb-4">
+          <WarRoomSyncAlert />
+        </div>
+
+        {/* Top Controls - 4 szekció: 3 egyforma + 1 kisebb a nyilaknak */}
+        <div className="flex items-stretch mb-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
           {/* Left Section: Produktív létszám */}
-          <div className={`flex-1 relative z-20 ${activeView === 'produktiv' ? '' : 'opacity-60'}`}>
-            <div className="mb-2">
+          <div className={`flex-1 p-4 border-r border-slate-700/50 ${activeView === 'produktiv' ? 'bg-slate-700/20' : 'opacity-60'} first:rounded-l-xl`}>
+            <div className="mb-3">
               <h2 className="text-lg font-bold text-white">Produktív létszám vs perc leadások</h2>
               <p className="text-xs text-slate-400">(nem csomagolási perc)</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative z-20">
               {(['napi', 'heti', 'havi'] as KimutatType[]).map((kimutat) => (
                 <div key={kimutat} ref={(el) => { dropdownRefs.current[kimutat] = el; }}>
                   <MuszakDropdown
@@ -230,14 +251,14 @@ export default function TeljesitmenyPage() {
 
           {/* Right Section: Egyéni teljesítmény */}
           <div
-            className={`flex-1 relative z-10 ${activeView === 'egyeni' ? '' : 'opacity-60'}`}
+            className={`flex-1 p-4 border-r border-slate-700/50 ${activeView === 'egyeni' ? 'bg-slate-700/20' : 'opacity-60'}`}
             ref={egyeniDropdownRef}
           >
-            <div className="mb-2">
+            <div className="mb-3">
               <h2 className="text-lg font-bold text-white">Egyéni teljesítmény adatok</h2>
               <p className="text-xs text-slate-400">Operátoronkénti kimutatás</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 relative z-10">
               {/* Műszak gombok */}
               {(['A', 'B', 'C', 'SUM'] as MuszakType[]).map((muszak) => (
                 <MuszakButton
@@ -284,6 +305,7 @@ export default function TeljesitmenyPage() {
                           onClick={() => {
                             setEgyeniPozicio(poz);
                             setOpenEgyeniDropdown(null);
+                            setPozicioOffset(0);  // Reset pozíció trend offset
                           }}
                           className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-700 transition-colors text-white ${
                             egyeniPozicio === poz ? 'bg-slate-700' : ''
@@ -312,39 +334,39 @@ export default function TeljesitmenyPage() {
             </div>
           </div>
 
-          {/* Pagination arrows (only for produktiv) */}
-          {activeView === 'produktiv' && (
-            <div className="flex items-center gap-3">
+          {/* Pagination arrows - 4. szekció (kisebb) */}
+          <div className="flex items-center justify-center px-4 min-w-[100px]">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handlePrevious}
                 disabled={!canGoBack}
-                className={`p-3 rounded-lg transition-colors ${
+                className={`p-2 rounded-lg transition-colors ${
                   canGoBack
                     ? 'bg-slate-700 hover:bg-slate-600 text-white'
                     : 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
                 }`}
                 title="Régebbi időszak"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <button
                 onClick={handleNext}
                 disabled={!canGoForward}
-                className={`p-3 rounded-lg transition-colors ${
+                className={`p-2 rounded-lg transition-colors ${
                   canGoForward
                     ? 'bg-slate-700 hover:bg-slate-600 text-white'
                     : 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
                 }`}
                 title="Újabb időszak"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
             </div>
-          )}
+          </div>
         </div>
 
         {/* ======================================================================== */}
@@ -447,13 +469,31 @@ export default function TeljesitmenyPage() {
                   <AinovaLoader />
                 </div>
               ) : !selectedOperator ? (
-                <OperatorRanglista
-                  operatorok={egyeniOperatorok}
-                  onSelectOperator={(op) => {
-                    setSelectedOperator(op);
-                    setEgyeniOffset(0);
-                  }}
-                />
+                <>
+                  <OperatorRanglista
+                    operatorok={egyeniOperatorok}
+                    onSelectOperator={(op) => {
+                      setSelectedOperator(op);
+                      setEgyeniOffset(0);
+                    }}
+                  />
+                  {/* Pozíció trend diagram - csak ha van pozíció kiválasztva */}
+                  {egyeniPozicio !== 'Mind' && (
+                    <PozicioTrendView
+                      pozicio={egyeniPozicio}
+                      trendData={pozicioTrendData}
+                      kimutat={pozicioKimutat}
+                      offset={pozicioOffset}
+                      totalItems={pozicioTotalItems}
+                      loading={pozicioTrendLoading}
+                      onKimutatChange={(k) => {
+                        setPozicioKimutat(k);
+                        setPozicioOffset(0);
+                      }}
+                      onOffsetChange={setPozicioOffset}
+                    />
+                  )}
+                </>
               ) : (
                 <EgyeniTrendView
                   operator={selectedOperator}

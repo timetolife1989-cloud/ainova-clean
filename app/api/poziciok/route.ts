@@ -5,6 +5,7 @@
 // Method: GET
 // Query params:
 //   - kihagyKategoria: Kihagyandó kategória (pl. "Vezetői")
+//   - onlyProduktiv: Ha true, csak Produktív kategória + Megadandó
 // =====================================================
 
 import { NextRequest } from 'next/server';
@@ -24,9 +25,38 @@ export async function GET(request: NextRequest) {
     // Query paraméterek
     const { searchParams } = new URL(request.url);
     const kihagyKategoria = searchParams.get('kihagyKategoria');
+    const onlyProduktiv = searchParams.get('onlyProduktiv') === 'true';
 
     // Pozíciók a referencia táblából
     const req = pool.request();
+    
+    if (onlyProduktiv) {
+      // Csak Produktív kategória + az operátoroknál használt "Megadandó" pozíció
+      const query = `
+        -- Produktív pozíciók a referencia táblából
+        SELECT id, nev, kategoria, sorrend
+        FROM ainova_poziciok
+        WHERE kategoria = 'Produktív'
+        
+        UNION ALL
+        
+        -- "Megadandó" - olyan operátorok akiknek nincs beállított munkakör
+        SELECT 
+          999 as id, 
+          'Megadandó' as nev, 
+          NULL as kategoria, 
+          998 as sorrend
+        WHERE EXISTS (
+          SELECT 1 FROM ainova_operatorok WHERE pozicio = 'Megadandó'
+        )
+        
+        ORDER BY sorrend, nev
+      `;
+      const result = await req.query(query);
+      return apiSuccess(result.recordset);
+    }
+    
+    // Hagyományos szűrés
     let query = `
       SELECT id, nev, kategoria, sorrend
       FROM ainova_poziciok

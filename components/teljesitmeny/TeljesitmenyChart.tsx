@@ -103,23 +103,23 @@ export function TeljesitmenyChart({
           style={{ filter: 'url(#shadow)' }}
         />
         
-        {/* Line - Cél perc (dotted green) */}
+        {/* Line - Cél perc: Nettó létszám × 480 (ha van War Room adat) */}
         <Line
           yAxisId="left"
           type="monotone"
-          dataKey="cel_perc"
-          name="Cél perc"
+          dataKey={(item: ChartDataItem) => item.netto_cel_perc ?? item.cel_perc}
+          name="Cél perc (nettó)"
           stroke="#22C55E"
           strokeWidth={3}
           strokeDasharray="8 4"
           dot={false}
         />
         
-        {/* Line with dots - Percentage (orange) */}
+        {/* Line with dots - Percentage: Nettó % (ha van War Room adat) */}
         <Line
           yAxisId="right"
           type="monotone"
-          dataKey="szazalek"
+          dataKey={(item: ChartDataItem) => item.netto_szazalek ?? item.szazalek}
           name="Teljesítmény %"
           stroke="#F59E0B"
           strokeWidth={2}
@@ -143,19 +143,57 @@ function CustomTooltip({ active, payload, selectedMuszak }: CustomTooltipProps) 
     const dataPoint = payload[0]?.payload;
     const hungarianDay = getHungarianDayName(dataPoint?.nap_nev);
     
+    // Nettó adatok (War Room-ból) vagy fallback a régi értékekre
+    const nettoLetszam = dataPoint?.netto_letszam ?? dataPoint?.letszam;
+    const nettoCelPerc = dataPoint?.netto_cel_perc ?? dataPoint?.cel_perc;
+    const nettoSzazalek = dataPoint?.netto_szazalek ?? dataPoint?.szazalek;
+    // has_warroom_data: API küldi, true ha tényleges War Room adat van (nem fallback)
+    const hasWarRoomData = dataPoint?.has_warroom_data === true;
+    
     return (
       <div className="bg-slate-900/95 backdrop-blur-sm border border-slate-600 rounded-xl p-4 shadow-2xl">
         <p className="text-white font-bold text-lg mb-3">
           {dataPoint?.datum_label} <span className="text-slate-400 font-normal">({hungarianDay})</span>
         </p>
+        
+        {/* Figyelmeztetés ha nincs War Room adat */}
+        {!hasWarRoomData && (
+          <div className="mb-3 px-2 py-1.5 bg-amber-900/50 border border-amber-600/50 rounded-lg">
+            <p className="text-amber-400 text-xs">
+              ⚠️ Nincs War Room létszám adat - műszakvezető nem töltötte!
+            </p>
+            <p className="text-amber-500/70 text-xs mt-0.5">
+              Csak visszajelentés alapján számolva.
+            </p>
+          </div>
+        )}
+        
         <div className="space-y-2 text-sm">
+          {/* Létszám sor - mindkét értéket mutatjuk ha van War Room adat */}
           <div className="flex justify-between gap-6">
             <span className="text-slate-400">Létszám:</span>
-            <span className="text-emerald-400 font-semibold">{dataPoint?.letszam} fő</span>
+            <span className="text-emerald-400 font-semibold">
+              {hasWarRoomData ? (
+                <>
+                  <span className="text-cyan-400">{nettoLetszam} nettó</span>
+                  <span className="text-slate-500 mx-1">/</span>
+                  <span className="text-slate-400">{dataPoint?.letszam} jelentett</span>
+                </>
+              ) : (
+                <span className="text-amber-400">{dataPoint?.letszam} fő (csak visszajelentés)</span>
+              )}
+            </span>
           </div>
           <div className="flex justify-between gap-6">
             <span className="text-slate-400">Cél perc:</span>
-            <span className="text-green-400 font-semibold">{dataPoint?.cel_perc?.toLocaleString()}</span>
+            <span className={hasWarRoomData ? "text-green-400 font-semibold" : "text-amber-400 font-semibold"}>
+              {nettoCelPerc?.toLocaleString()}
+              {hasWarRoomData ? (
+                <span className="text-slate-500 text-xs ml-1">({nettoLetszam}×480)</span>
+              ) : (
+                <span className="text-amber-500/70 text-xs ml-1">(becsült)</span>
+              )}
+            </span>
           </div>
           <div className="flex justify-between gap-6">
             <span className="text-slate-400">Leadott perc:</span>
@@ -165,8 +203,9 @@ function CustomTooltip({ active, payload, selectedMuszak }: CustomTooltipProps) 
           </div>
           <div className="flex justify-between gap-6 pt-2 border-t border-slate-700">
             <span className="text-slate-400">Teljesítmény:</span>
-            <span className={`font-bold ${dataPoint?.szazalek >= 100 ? 'text-green-400' : 'text-yellow-400'}`}>
-              {dataPoint?.szazalek?.toFixed(1)}%
+            <span className={`font-bold ${hasWarRoomData ? (nettoSzazalek >= 100 ? 'text-green-400' : 'text-yellow-400') : 'text-amber-400'}`}>
+              {nettoSzazalek?.toFixed(1)}%
+              {!hasWarRoomData && <span className="text-amber-500/70 text-xs ml-1">(becsült)</span>}
             </span>
           </div>
         </div>
@@ -193,7 +232,7 @@ export function ChartLegend({ selectedMuszak }: ChartLegendProps) {
       </div>
       <div className="flex items-center gap-2">
         <div className="w-6 h-0.5 bg-green-500" style={{ borderTop: '3px dashed #22C55E' }} />
-        <span>Cél perc = létszám × 480 (szaggatott vonal)</span>
+        <span>Cél perc = nettó létszám × 480 (szaggatott vonal)</span>
       </div>
       <div className="flex items-center gap-2">
         <div className="w-3 h-3 rounded-full bg-amber-500" />

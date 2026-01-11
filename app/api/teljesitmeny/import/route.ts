@@ -347,30 +347,101 @@ export async function POST(request: NextRequest) {
     }
 
     // =====================================================
-    // 5. Operátorok szinkronizálása az ainova_operatorok táblába
+    // 5. Operátorok OKOS szinkronizálása az ainova_operatorok táblába
+    // - Naponta egyszer fut
+    // - Csak változás esetén módosít (új operátor / kikerült operátor)
     // =====================================================
-    let syncedOperators = 0;
-    for (const [vsz, op] of lacOperators) {
-      try {
-        await pool.request()
-          .input('torzsszam', sql.NVarChar(50), vsz)
-          .input('nev', sql.NVarChar(100), op.nev)
-          .input('muszak', sql.NVarChar(10), op.muszak)
-          .query(`
-            IF NOT EXISTS (SELECT 1 FROM ainova_operatorok WHERE torzsszam = @torzsszam)
-              INSERT INTO ainova_operatorok (torzsszam, nev, muszak, pozicio, aktiv)
-              VALUES (@torzsszam, @nev, @muszak, 'Admin adja meg', 1)
-            ELSE
-              UPDATE ainova_operatorok 
-              SET nev = @nev, muszak = @muszak
-              WHERE torzsszam = @torzsszam
-          `);
-        syncedOperators++;
-      } catch (syncErr: any) {
-        console.error('[Teljesítmény Import] Operator sync error:', syncErr.message);
+    let operatorSyncResult = { added: 0, removed: 0, updated: 0, skipped: false };
+    
+    // Ellenőrizzük mikor volt utoljára operátor sync
+    const lastOperatorSync = await pool.request().query(`
+      SELECT last_operator_sync_at FROM ainova_import_status WHERE import_type = 'teljesitmeny'
+    `);
+    const lastSync = lastOperatorSync.recordset[0]?.last_operator_sync_at;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const wasOperatorSyncToday = lastSync && new Date(lastSync) >= today;
+
+    if (wasOperatorSyncToday) {
+      console.log('[Teljesítmény Import] Operator sync already done today, skipping');
+      operatorSyncResult.skipped = true;
+    } else {
+      console.log('[Teljesítmény Import] Running daily operator sync...');
+      
+      // Jelenlegi SQL operátorok lekérdezése
+      const currentOperators = await pool.request().query(`
+        SELECT torzsszam, nev, muszak FROM ainova_operatorok
+      `);
+      const sqlOperatorMap = new Map<string, { nev: string; muszak: string }>();
+      for (const op of currentOperators.recordset) {
+        sqlOperatorMap.set(op.torzsszam, { nev: op.nev, muszak: op.muszak });
       }
+
+      // Excel operátorok (lacOperators Map már megvan fentről)
+      const excelVszSet = new Set(lacOperators.keys());
+
+      // 1. ÚJ operátorok hozzáadása (Excelben van, SQL-ben nincs)
+      for (const [vsz, op] of lacOperators) {
+        const existing = sqlOperatorMap.get(vsz);
+        if (!existing) {
+          // Új operátor - INSERT
+          try {
+            const maxIdResult = await pool.request().query('SELECT ISNULL(MAX(id), 0) + 1 as nextId FROM ainova_operatorok');
+            const nextId = maxIdResult.recordset[0].nextId;
+            await pool.request()
+              .input('id', sql.Int, nextId)
+              .input('torzsszam', sql.NVarChar(50), vsz)
+              .input('nev', sql.NVarChar(100), op.nev)
+              .input('muszak', sql.NVarChar(10), op.muszak)
+              .query(`
+                INSERT INTO ainova_operatorok (id, torzsszam, nev, muszak, pozicio, aktiv)
+                VALUES (@id, @torzsszam, @nev, @muszak, 'Megadandó', 1)
+              `);
+            operatorSyncResult.added++;
+            console.log(`[Teljesítmény Import] + Új operátor: ${vsz} - ${op.nev}`);
+          } catch (err: any) {
+            console.error(`[Teljesítmény Import] Insert error for ${vsz}:`, err.message);
+          }
+        } else if (existing.nev !== op.nev || existing.muszak !== op.muszak) {
+          // Változott név vagy műszak - UPDATE
+          try {
+            await pool.request()
+              .input('torzsszam', sql.NVarChar(50), vsz)
+              .input('nev', sql.NVarChar(100), op.nev)
+              .input('muszak', sql.NVarChar(10), op.muszak)
+              .query(`UPDATE ainova_operatorok SET nev = @nev, muszak = @muszak WHERE torzsszam = @torzsszam`);
+            operatorSyncResult.updated++;
+            console.log(`[Teljesítmény Import] ~ Frissítve: ${vsz} - ${op.nev}`);
+          } catch (err: any) {
+            console.error(`[Teljesítmény Import] Update error for ${vsz}:`, err.message);
+          }
+        }
+      }
+
+      // 2. KIKERÜLT operátorok törlése (SQL-ben van, Excelben nincs)
+      for (const [vsz] of sqlOperatorMap) {
+        if (!excelVszSet.has(vsz)) {
+          try {
+            await pool.request()
+              .input('torzsszam', sql.NVarChar(50), vsz)
+              .query(`DELETE FROM ainova_operatorok WHERE torzsszam = @torzsszam`);
+            operatorSyncResult.removed++;
+            console.log(`[Teljesítmény Import] - Törölve: ${vsz}`);
+          } catch (err: any) {
+            console.error(`[Teljesítmény Import] Delete error for ${vsz}:`, err.message);
+          }
+        }
+      }
+
+      // Sync timestamp frissítése
+      await pool.request().query(`
+        UPDATE ainova_import_status 
+        SET last_operator_sync_at = GETDATE() 
+        WHERE import_type = 'teljesitmeny'
+      `);
+
+      console.log(`[Teljesítmény Import] Operator sync: +${operatorSyncResult.added} új, -${operatorSyncResult.removed} törölve, ~${operatorSyncResult.updated} frissítve`);
     }
-    console.log(`[Teljesítmény Import] Synced ${syncedOperators} operators to ainova_operatorok`);
 
     // =====================================================
     // 6. Adatok feldolgozása (UPSERT logika)
@@ -504,7 +575,7 @@ export async function POST(request: NextRequest) {
         notLac,
         errors,
         lacOperatorsFound: lacOperators.size,
-        syncedOperators,
+        operatorSync: operatorSyncResult,
         dateColumnsFound: dateColumns.length,
         lookbackDays: IMPORT_LOOKBACK_DAYS,
       },

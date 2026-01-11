@@ -20,6 +20,12 @@ export const NAPI_PERCES_EXCEL_PATH = '\\\\sveeafs01\\TDK_EEA_MAG_PEMC\\!Users\\
 export const SHEET_FILTER_LETSZAM = 'Filter létszám';
 export const SHEET_PERCEK = 'Percek';
 
+// War Room Excel
+export const WAR_ROOM_EXCEL_PATH = '\\\\sveeafs01.tdk-prod.net\\TDK_EEA_MAG_PEMC\\!Production\\LAC\\!War Room adatok\\LaC_War Room adatok.xlsm';
+export const SHEET_WAR_ROOM_NAPI_A = 'Napi "A"';
+export const SHEET_WAR_ROOM_NAPI_B = 'Napi "B"';
+export const SHEET_WAR_ROOM_NAPI_C = 'Napi "C"';
+
 // Napi perces Excel oszlop indexek (0-based)
 export const NAPI_PERCES_COLS = {
   DATUM: 0,        // A oszlop
@@ -33,7 +39,6 @@ export const NAPI_PERCES_COLS = {
 } as const;
 
 export const IMPORT_LOCK_TIMEOUT_MINUTES = 5;
-export const IMPORT_AFTER_NOON_SKIP = true;
 export const IMPORT_LOOKBACK_DAYS = 7;
 
 // =====================================================
