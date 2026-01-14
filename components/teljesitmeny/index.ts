@@ -17,3 +17,4 @@ export { TeljesitmenyTable } from './TeljesitmenyTable';
 export { ImportStatusBar } from '@/components/ui/ImportStatusBar';
 export { OperatorRanglista, EgyeniTrendView, PozicioTrendView } from './EgyeniView';
 export { WarRoomSyncAlert } from './WarRoomSyncAlert';
+export { default as KategoriaPieChart } from './KategoriaPieChart';

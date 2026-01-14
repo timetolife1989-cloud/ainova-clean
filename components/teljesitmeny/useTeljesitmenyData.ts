@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   NapiData,
   HetiData,
@@ -10,6 +10,9 @@ import {
   KimutatType,
   ImportStatus,
 } from './types';
+
+// Automatikus frissítési intervallum (2 perc)
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000;
 
 interface UseTeljesitmenyDataReturn {
   // Data
@@ -172,6 +175,61 @@ export function useTeljesitmenyData({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Automatikus háttér frissítés (silent, nincs loading ugrálás)
+  useEffect(() => {
+    const silentRefetch = async () => {
+      try {
+        let endpoint = '';
+        
+        if (activeKimutat === 'napi') {
+          endpoint = `/api/teljesitmeny?type=napi-kimutatas&muszak=${selectedMuszak}&offset=${offset}`;
+        } else if (activeKimutat === 'heti') {
+          endpoint = `/api/teljesitmeny?type=heti-kimutatas&muszak=${selectedMuszak}&offset=${offset}`;
+        } else if (activeKimutat === 'havi') {
+          endpoint = `/api/teljesitmeny?type=havi-kimutatas&muszak=${selectedMuszak}`;
+        }
+
+        const response = await fetch(endpoint);
+        if (!response.ok) return;
+        
+        const result = await response.json();
+        if (result.error) return;
+
+        // Silent update - nincs setLoading!
+        if (activeKimutat === 'napi') {
+          setData(result.data || []);
+          if (result.data && result.data.length > 0) {
+            setTotalDays(result.data[0].total_days);
+            setPeriodStart(result.data[0].period_start);
+            setPeriodEnd(result.data[0].period_end);
+          }
+        } else if (activeKimutat === 'heti') {
+          setHetiData(result.data || []);
+          if (result.data && result.data.length > 0) {
+            setTotalWeeks(result.data[0].total_weeks);
+            setPeriodStartWeek(result.data[0].period_start_week);
+            setPeriodEndWeek(result.data[0].period_end_week);
+          }
+        } else if (activeKimutat === 'havi') {
+          setHaviData(result.data || []);
+        }
+      } catch {
+        // Silent - nem mutatunk hibát
+      }
+    };
+
+    const interval = setInterval(silentRefetch, AUTO_REFRESH_INTERVAL);
+    
+    // Tab fókusz esetén is frissítünk
+    const handleFocus = () => silentRefetch();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [activeKimutat, selectedMuszak, offset]);
 
   // Transform data to unified chart format
   const chartData: ChartDataItem[] = 

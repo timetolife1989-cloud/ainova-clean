@@ -30,6 +30,7 @@ import {
   OperatorRanglista,
   EgyeniTrendView,
   PozicioTrendView,
+  KategoriaPieChart,
 } from '@/components/teljesitmeny';
 
 export default function TeljesitmenyPage() {
@@ -408,12 +409,14 @@ export default function TeljesitmenyPage() {
                 ) : (
                   <TeljesitmenyChart data={chartData} selectedMuszak={selectedMuszak} />
                 )}
+
+                {/* Kategória Pie Chart - leadott percek bontása */}
+                {!loading && !error && chartData.length > 0 && (
+                  <KategoriaPieChart viewType={activeKimutat} />
+                )}
               </div>
 
-              {/* Legend */}
-              <div className="px-6 pb-6">
-                <ChartLegend selectedMuszak={selectedMuszak} />
-              </div>
+              {/* Jelmagyarázat eltávolítva - a kördiagram jobb oldali listája helyettesíti */}
             </motion.div>
 
             {/* Data Table */}

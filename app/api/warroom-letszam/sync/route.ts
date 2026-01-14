@@ -6,6 +6,7 @@
 // =====================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { checkSession } from '@/lib/api-utils';
 import { 
   getWarRoomSyncStatus, 
   forceWarRoomSync 
@@ -15,8 +16,12 @@ import {
  * GET /api/warroom-letszam/sync
  * Státusz lekérése
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
+
     const status = await getWarRoomSyncStatus();
     
     return NextResponse.json({
@@ -40,9 +45,12 @@ export async function GET() {
  * POST /api/warroom-letszam/sync
  * Manuális szinkronizálás
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
+    // Session ellenőrzés
+    const session = await checkSession(request);
+    if (!session.valid) return session.response;
+
     console.log('[API] War Room manuális szinkronizálás indítása...');
     
     const result = await forceWarRoomSync();

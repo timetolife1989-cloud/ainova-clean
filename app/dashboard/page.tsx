@@ -54,13 +54,21 @@ export default function DashboardPage() {
             href="/dashboard/napi-perces"
           />
           
-          {/* Kimutatás Adatok Tile (analytics) */}
+          <MenuTile
+            icon="📅"
+            title="ALLOKÁCIÓS TÁBLÁZAT"
+            description="Termelés ütemezése"
+            href="/dashboard/allokacio"
+          />
+          
+          {/* KIMUTATÁS ADATOK - Ideiglenesen elrejtve (2026-01-12)
           <MenuTile
             icon="📈"
             title="KIMUTATÁS ADATOK"
             description="Létszám és leadás statisztikák"
             href="/dashboard/kimutatas"
           />
+          */}
           
           {/* Admin Panel Tile (purple variant) - Active */}
           <MenuTile
