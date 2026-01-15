@@ -1,3 +1,3 @@
 // Központi hooks exportok
 
-export { useAutoRefresh, usePolling } from './useAutoRefresh';
+export { useAutoRefresh, usePolling, REFRESH_CONFIG } from './useAutoRefresh';

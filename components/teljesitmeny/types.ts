@@ -61,6 +61,7 @@ export interface HaviData {
 
 // Chart data - unified type for all views
 export interface ChartDataItem {
+  datum?: string;                     // Eredeti dátum (YYYY-MM-DD) - API-ból
   datum_label: string;
   nap_nev: string;
   letszam: number;                    // Visszajelentéssel rendelkező operátorok

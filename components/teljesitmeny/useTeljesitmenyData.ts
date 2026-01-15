@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { REFRESH_CONFIG } from '@/hooks';
 import {
   NapiData,
   HetiData,
@@ -10,9 +11,6 @@ import {
   KimutatType,
   ImportStatus,
 } from './types';
-
-// Automatikus frissítési intervallum (2 perc)
-const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000;
 
 interface UseTeljesitmenyDataReturn {
   // Data
@@ -219,15 +217,21 @@ export function useTeljesitmenyData({
       }
     };
 
-    const interval = setInterval(silentRefetch, AUTO_REFRESH_INTERVAL);
+    const interval = setInterval(silentRefetch, REFRESH_CONFIG.DEFAULT_INTERVAL);
     
-    // Tab fókusz esetén is frissítünk
+    // Tab fókusz + visibility change esetén is frissítünk
     const handleFocus = () => silentRefetch();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') silentRefetch();
+    };
+    
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [activeKimutat, selectedMuszak, offset]);
 
@@ -235,6 +239,7 @@ export function useTeljesitmenyData({
   const chartData: ChartDataItem[] = 
     activeKimutat === 'napi'
       ? data.map(d => ({
+          datum: d.datum,  // Eredeti dátum YYYY-MM-DD
           datum_label: d.datum_label,
           nap_nev: d.nap_nev,
           letszam: d.letszam,

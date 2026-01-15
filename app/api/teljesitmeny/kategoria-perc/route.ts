@@ -63,10 +63,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'napi';
-    const datum = searchParams.get('datum');
+    const rawDatum = searchParams.get('datum');
+    // Dátum normalizálása - ISO formátum is elfogadva (2026-01-14T00:00:00.000Z -> 2026-01-14)
+    const datum = rawDatum ? rawDatum.split('T')[0] : null;
     const ev = parseInt(searchParams.get('ev') || new Date().getFullYear().toString());
     const het = searchParams.get('het');
     const honap = searchParams.get('honap');
+    // Műszak szűrő: 'A', 'B', 'C' vagy 'SUM' (összesített - default)
+    const muszak = searchParams.get('muszak') || 'SUM';
 
     const pool = await getPool();
 
@@ -74,27 +78,35 @@ export async function GET(request: NextRequest) {
 
     switch (type) {
       case 'napi':
-        // Adott nap vagy legutolsó nap
+        // Adott nap vagy legutolsó LEZÁRT nap (mai nap kihagyása!)
         if (datum) {
           result = await pool.request()
             .input('datum', sql.Date, datum)
+            .input('muszak', sql.NVarChar, muszak)
             .query(`
               SELECT 
                 kategoria_kod,
-                CAST(leadott_perc AS INT) AS perc
+                CAST(SUM(leadott_perc) AS INT) AS perc
               FROM ainova_napi_kategoria_perc
-              WHERE datum = @datum
-              ORDER BY leadott_perc DESC
+              WHERE datum = @datum AND muszak = @muszak
+              GROUP BY kategoria_kod
+              ORDER BY perc DESC
             `);
         } else {
-          // Legutolsó nap amire van adat
-          result = await pool.request().query(`
-            SELECT 
-              kategoria_kod,
-              CAST(leadott_perc AS INT) AS perc
-            FROM ainova_napi_kategoria_perc
-            WHERE datum = (SELECT MAX(datum) FROM ainova_napi_kategoria_perc)
-            ORDER BY leadott_perc DESC
+          // Legutolsó LEZÁRT nap - mai nap kihagyása (szinkronban a fő charttal!)
+          result = await pool.request()
+            .input('muszak', sql.NVarChar, muszak)
+            .query(`
+              SELECT 
+                kategoria_kod,
+                CAST(SUM(leadott_perc) AS INT) AS perc
+              FROM ainova_napi_kategoria_perc
+              WHERE datum = (
+                SELECT MAX(datum) FROM ainova_napi_kategoria_perc 
+                WHERE datum < CAST(GETDATE() AS DATE) AND muszak = @muszak
+              ) AND muszak = @muszak
+              GROUP BY kategoria_kod
+              ORDER BY perc DESC
           `);
         }
         break;
@@ -106,27 +118,31 @@ export async function GET(request: NextRequest) {
           result = await pool.request()
             .input('het', sql.Int, hetNum)
             .input('ev', sql.Int, ev)
+            .input('muszak', sql.NVarChar, muszak)
             .query(`
               SELECT 
                 kategoria_kod,
                 CAST(SUM(leadott_perc) AS INT) AS perc
               FROM ainova_napi_kategoria_perc
-              WHERE DATEPART(ISO_WEEK, datum) = @het AND YEAR(datum) = @ev
+              WHERE DATEPART(ISO_WEEK, datum) = @het AND YEAR(datum) = @ev AND muszak = @muszak
               GROUP BY kategoria_kod
               ORDER BY perc DESC
             `);
         } else {
           // Aktuális hét
-          result = await pool.request().query(`
-            SELECT 
-              kategoria_kod,
-              CAST(SUM(leadott_perc) AS INT) AS perc
-            FROM ainova_napi_kategoria_perc
-            WHERE DATEPART(ISO_WEEK, datum) = DATEPART(ISO_WEEK, GETDATE())
-              AND YEAR(datum) = YEAR(GETDATE())
-            GROUP BY kategoria_kod
-            ORDER BY perc DESC
-          `);
+          result = await pool.request()
+            .input('muszak', sql.NVarChar, muszak)
+            .query(`
+              SELECT 
+                kategoria_kod,
+                CAST(SUM(leadott_perc) AS INT) AS perc
+              FROM ainova_napi_kategoria_perc
+              WHERE DATEPART(ISO_WEEK, datum) = DATEPART(ISO_WEEK, GETDATE())
+                AND YEAR(datum) = YEAR(GETDATE())
+                AND muszak = @muszak
+              GROUP BY kategoria_kod
+              ORDER BY perc DESC
+            `);
         }
         break;
 
@@ -137,26 +153,29 @@ export async function GET(request: NextRequest) {
           result = await pool.request()
             .input('honap', sql.Int, honapNum)
             .input('ev', sql.Int, ev)
+            .input('muszak', sql.NVarChar, muszak)
             .query(`
               SELECT 
                 kategoria_kod,
                 CAST(SUM(leadott_perc) AS INT) AS perc
               FROM ainova_napi_kategoria_perc
-              WHERE MONTH(datum) = @honap AND YEAR(datum) = @ev
+              WHERE MONTH(datum) = @honap AND YEAR(datum) = @ev AND muszak = @muszak
               GROUP BY kategoria_kod
               ORDER BY perc DESC
             `);
         } else {
           // Aktuális hónap
-          result = await pool.request().query(`
-            SELECT 
-              kategoria_kod,
-              CAST(SUM(leadott_perc) AS INT) AS perc
-            FROM ainova_napi_kategoria_perc
-            WHERE MONTH(datum) = MONTH(GETDATE()) AND YEAR(datum) = YEAR(GETDATE())
-            GROUP BY kategoria_kod
-            ORDER BY perc DESC
-          `);
+          result = await pool.request()
+            .input('muszak', sql.NVarChar, muszak)
+            .query(`
+              SELECT 
+                kategoria_kod,
+                CAST(SUM(leadott_perc) AS INT) AS perc
+              FROM ainova_napi_kategoria_perc
+              WHERE MONTH(datum) = MONTH(GETDATE()) AND YEAR(datum) = YEAR(GETDATE()) AND muszak = @muszak
+              GROUP BY kategoria_kod
+              ORDER BY perc DESC
+            `);
         }
         break;
 
@@ -171,8 +190,9 @@ export async function GET(request: NextRequest) {
     const kategoriaSzumma = result.recordset.reduce((sum: number, r: { perc: number }) => sum + r.perc, 0);
 
     // Összesített percek a teljesítmény táblából (pontos szám)
-    // Ez a Percek sheet-ből jön, amit a főnöknek mutatsz
+    // FONTOS: műszak szűrés is kell, ha nem SUM!
     let teljesitmenyPerc = 0;
+    const isSUM = muszak === 'SUM';
     
     try {
       let teljesitmenyQuery;
@@ -181,10 +201,15 @@ export async function GET(request: NextRequest) {
           if (datum) {
             teljesitmenyQuery = await pool.request()
               .input('datum', sql.Date, datum)
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE datum = @datum`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE datum = @datum AND (@isSUM = 1 OR muszak = @muszak)`);
           } else {
+            // Mai nap kihagyása - szinkronban a fő charttal!
             teljesitmenyQuery = await pool.request()
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE datum = (SELECT MAX(datum) FROM ainova_teljesitmeny)`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE datum = (SELECT MAX(datum) FROM ainova_teljesitmeny WHERE datum < CAST(GETDATE() AS DATE)) AND (@isSUM = 1 OR muszak = @muszak)`);
           }
           break;
         case 'heti':
@@ -193,10 +218,14 @@ export async function GET(request: NextRequest) {
             teljesitmenyQuery = await pool.request()
               .input('het', sql.Int, hetNum2)
               .input('ev', sql.Int, ev)
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE DATEPART(ISO_WEEK, datum) = @het AND YEAR(datum) = @ev`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE DATEPART(ISO_WEEK, datum) = @het AND YEAR(datum) = @ev AND (@isSUM = 1 OR muszak = @muszak)`);
           } else {
             teljesitmenyQuery = await pool.request()
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE DATEPART(ISO_WEEK, datum) = DATEPART(ISO_WEEK, GETDATE()) AND YEAR(datum) = YEAR(GETDATE())`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE DATEPART(ISO_WEEK, datum) = DATEPART(ISO_WEEK, GETDATE()) AND YEAR(datum) = YEAR(GETDATE()) AND (@isSUM = 1 OR muszak = @muszak)`);
           }
           break;
         case 'havi':
@@ -205,10 +234,14 @@ export async function GET(request: NextRequest) {
             teljesitmenyQuery = await pool.request()
               .input('honap', sql.Int, honapNum2)
               .input('ev', sql.Int, ev)
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE MONTH(datum) = @honap AND YEAR(datum) = @ev`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE MONTH(datum) = @honap AND YEAR(datum) = @ev AND (@isSUM = 1 OR muszak = @muszak)`);
           } else {
             teljesitmenyQuery = await pool.request()
-              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE MONTH(datum) = MONTH(GETDATE()) AND YEAR(datum) = YEAR(GETDATE())`);
+              .input('muszak', sql.NVarChar, muszak)
+              .input('isSUM', sql.Bit, isSUM ? 1 : 0)
+              .query(`SELECT ISNULL(SUM(leadott_perc), 0) AS ossz FROM ainova_teljesitmeny WHERE MONTH(datum) = MONTH(GETDATE()) AND YEAR(datum) = YEAR(GETDATE()) AND (@isSUM = 1 OR muszak = @muszak)`);
           }
           break;
       }

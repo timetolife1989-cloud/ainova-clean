@@ -197,6 +197,54 @@ function excelDateToJS(serial) {
   return new Date(utc_days * 86400 * 1000);
 }
 
+// Idő string → percek (pl. "21:45:00" → 1305)
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const parts = String(timeStr).trim().split(':');
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+// Műszakváltás korrekció - PONTOSAN mint az Excel makróban:
+// 21:45-05:45 közötti visszajelentések az ELŐZŐ naphoz tartoznak
+// VBA: If tm >= TimeValue("21:45:00") Or tm < TimeValue("05:45:00") Then dt = DateAdd("d", -1, dt)
+function applyShiftCorrection(datum, idoStr) {
+  const minutes = timeToMinutes(idoStr);
+  if (minutes === null) return datum;
+  
+  // 21:45 = 1305 perc, 05:45 = 345 perc
+  if (minutes >= 1305 || minutes < 345) {
+    // Éjszakás műszak → előző naphoz soroljuk
+    const corrected = new Date(datum);
+    corrected.setDate(corrected.getDate() - 1);
+    return corrected;
+  }
+  return datum;
+}
+
+// Műszak meghatározása időpontból
+// A műszak: 05:45 - 13:45
+// B műszak: 13:45 - 21:45
+// C műszak: 21:45 - 05:45 (éjszaka)
+function getMuszak(idoStr) {
+  const minutes = timeToMinutes(idoStr);
+  if (minutes === null) return 'A'; // Default
+  
+  // C műszak: 21:45 (1305) - 05:45 (345)
+  if (minutes >= 1305 || minutes < 345) {
+    return 'C';
+  }
+  // A műszak: 05:45 (345) - 13:45 (825)
+  if (minutes >= 345 && minutes < 825) {
+    return 'A';
+  }
+  // B műszak: 13:45 (825) - 21:45 (1305)
+  return 'B';
+}
+
 function formatDate(date) {
   if (!date) return null;
   const y = date.getFullYear();
@@ -214,7 +262,7 @@ const config = {
 };
 
 async function sync() {
-  console.log('=== PERC SAP → Kategória Sync ===\n');
+  console.log('=== PERC SAP → Kategória Sync (műszak bontással) ===\n');
   
   const buf = fs.readFileSync(excelPath);
   const wb = XLSX.read(buf, { type: 'buffer' });
@@ -224,8 +272,10 @@ async function sync() {
   
   console.log('Excel sorok:', data.length);
   
-  // Napi + kategória összesítés
-  const napiKategoria = new Map(); // "2025-12-16|SZERELES" → perc összeg
+  // Napi + kategória + műszak összesítés
+  // "2025-12-16|SZERELES|A" → perc összeg (műszakonként)
+  // "2025-12-16|SZERELES|SUM" → perc összeg (napi összesen)
+  const napiKategoria = new Map();
   const ismeretlenMuveletek = new Set();
   let feldolgozott = 0;
   
@@ -235,6 +285,7 @@ async function sync() {
     
     const munkahely = String(row[1] || '');
     const muvelet = String(row[5] || '').trim();
+    const idoStr = String(row[8] || '');  // I oszlop = index 8 (idő, pl. "14:16:29")
     const perc = Number(row[10] || 0);
     const datumSerial = row[11];
     
@@ -245,8 +296,14 @@ async function sync() {
     if (perc <= 0) continue;
     
     // Dátum konverzió
-    const datum = excelDateToJS(datumSerial);
+    let datum = excelDateToJS(datumSerial);
     if (!datum) continue;
+    
+    // Műszak meghatározása (időpont alapján)
+    const muszak = getMuszak(idoStr);
+    
+    // MŰSZAKVÁLTÁS KORREKCIÓ - 21:45-05:45 → előző nap (mint Excel makróban)
+    datum = applyShiftCorrection(datum, idoStr);
     
     const datumStr = formatDate(datum);
     
@@ -260,9 +317,13 @@ async function sync() {
       ismeretlenMuveletek.add(muvelet);
     }
     
-    // Összesítés
-    const key = `${datumStr}|${kategoria}`;
-    napiKategoria.set(key, (napiKategoria.get(key) || 0) + perc);
+    // Összesítés - műszakonként ÉS napi összesen is
+    const keyMuszak = `${datumStr}|${kategoria}|${muszak}`;
+    const keySUM = `${datumStr}|${kategoria}|SUM`;
+    
+    napiKategoria.set(keyMuszak, (napiKategoria.get(keyMuszak) || 0) + perc);
+    napiKategoria.set(keySUM, (napiKategoria.get(keySUM) || 0) + perc);
+    
     feldolgozott++;
   }
   
@@ -280,10 +341,21 @@ async function sync() {
   
   // Napi összesen ellenőrzés
   const napiOsszesen = new Map();
+  const muszakStat = { A: 0, B: 0, C: 0, SUM: 0 };
+  
   for (const [key, perc] of napiKategoria) {
-    const [datum] = key.split('|');
-    napiOsszesen.set(datum, (napiOsszesen.get(datum) || 0) + perc);
+    const [datum, , muszak] = key.split('|');
+    if (muszak === 'SUM') {
+      napiOsszesen.set(datum, (napiOsszesen.get(datum) || 0) + perc);
+    }
+    muszakStat[muszak] = (muszakStat[muszak] || 0) + perc;
   }
+  
+  console.log('\n=== Műszak statisztika ===');
+  console.log(`  A műszak: ${Math.round(muszakStat.A).toLocaleString()} perc`);
+  console.log(`  B műszak: ${Math.round(muszakStat.B).toLocaleString()} perc`);
+  console.log(`  C műszak: ${Math.round(muszakStat.C).toLocaleString()} perc`);
+  console.log(`  Összesen: ${Math.round(muszakStat.SUM).toLocaleString()} perc`);
   
   console.log('\n=== Napi összesítés (utolsó 5 nap) ===');
   const sortedDays = [...napiOsszesen.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 5);
@@ -313,44 +385,53 @@ async function sync() {
   
   console.log('\n✅ Tábla kész');
   
-  // Adatok beszúrása (MERGE)
-  let inserted = 0, updated = 0;
+  // Érintett napok listája
+  const erintettNapok = [...new Set([...napiKategoria.keys()].map(k => k.split('|')[0]))];
+  console.log(`\n📅 Érintett napok: ${erintettNapok.length} db`);
+  
+  // FONTOS: Először töröljük az érintett napok összes kategóriáját
+  // Ez azért kell, mert a 21:45 korrekció miatt egy kategória átcsúszhat másik napra
+  // és a MERGE nem törli az elavult rekordokat
+  for (const datum of erintettNapok) {
+    await pool.request()
+      .input('datum', sql.Date, datum)
+      .query(`DELETE FROM ainova_napi_kategoria_perc WHERE datum = @datum`);
+  }
+  console.log(`✅ Régi adatok törölve az érintett napokról`);
+  
+  // Adatok beszúrása (INSERT - a törlés után nem kell MERGE)
+  // Minden nap + kategória + műszak kombináció külön rekord
+  let inserted = 0;
   
   for (const [key, perc] of napiKategoria) {
-    const [datum, kategoria] = key.split('|');
+    const [datum, kategoria, muszak] = key.split('|');
     
-    const result = await pool.request()
+    await pool.request()
       .input('datum', sql.Date, datum)
       .input('kategoria', sql.NVarChar, kategoria)
+      .input('muszak', sql.NVarChar, muszak)
       .input('perc', sql.Decimal(10,2), perc)
       .query(`
-        MERGE ainova_napi_kategoria_perc AS target
-        USING (SELECT @datum AS datum, @kategoria AS kategoria) AS source
-        ON target.datum = source.datum AND target.kategoria_kod = source.kategoria
-        WHEN MATCHED THEN
-          UPDATE SET leadott_perc = @perc, utolso_frissites = GETDATE()
-        WHEN NOT MATCHED THEN
-          INSERT (datum, kategoria_kod, leadott_perc) VALUES (@datum, @kategoria, @perc)
-        OUTPUT $action;
+        INSERT INTO ainova_napi_kategoria_perc (datum, kategoria_kod, muszak, leadott_perc)
+        VALUES (@datum, @kategoria, @muszak, @perc)
       `);
-    
-    if (result.recordset[0]['$action'] === 'INSERT') inserted++;
-    else updated++;
+    inserted++;
   }
   
-  console.log(`\n✅ Szinkronizálva: ${inserted} új, ${updated} frissítve`);
+  console.log(`\n✅ Szinkronizálva: ${inserted} rekord beszúrva`);
   
   // Ellenőrzés
   const check = await pool.request().query(`
-    SELECT TOP 10 
+    SELECT TOP 15 
       FORMAT(datum, 'yyyy-MM-dd') AS datum,
       kategoria_kod,
+      muszak,
       CAST(leadott_perc AS INT) AS perc
     FROM ainova_napi_kategoria_perc
-    ORDER BY datum DESC, leadott_perc DESC
+    ORDER BY datum DESC, muszak, leadott_perc DESC
   `);
   
-  console.log('\n=== Ellenőrzés (utolsó 10 rekord) ===');
+  console.log('\n=== Ellenőrzés (utolsó 15 rekord) ===');
   console.table(check.recordset);
   
   pool.close();

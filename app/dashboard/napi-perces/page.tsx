@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/dashboard';
 import {
   NapiData,
@@ -12,6 +12,7 @@ import {
   NapiPercesTable,
 } from '@/components/napi-perces';
 import { ImportStatusBar } from '@/components/ui/ImportStatusBar';
+import { REFRESH_CONFIG } from '@/hooks';
 
 export default function NapiPercesPage() {
   // State
@@ -27,10 +28,10 @@ export default function NapiPercesPage() {
   // Page size based on kimutat type
   const pageSize = PAGE_SIZES[activeKimutat];
 
-  // Fetch data function
-  const fetchData = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
-    setError(null);
+  // Fetch data function - silent módban nincs loading villogás
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setError(null);
     try {
       const params = new URLSearchParams({
         type: activeKimutat,
@@ -55,20 +56,39 @@ export default function NapiPercesPage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ismeretlen hiba');
-      setData([]);
+      if (!silent) {
+        setError(err instanceof Error ? err.message : 'Ismeretlen hiba');
+        setData([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
-
-  // Initial fetch only - no auto-refresh for data
-  useEffect(() => {
-    fetchData();
   }, [activeKimutat, offset]);
 
+  // Kezdeti betöltés + paraméter változás
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Automatikus háttér frissítés + visibility/focus
+  useEffect(() => {
+    const interval = setInterval(() => fetchData(true), REFRESH_CONFIG.DEFAULT_INTERVAL);
+    
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', () => fetchData(true));
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', () => fetchData(true));
+    };
+  }, [fetchData]);
+
   // Fetch import status function - checks if new data arrived
-  const checkForUpdates = async () => {
+  const checkForUpdates = useCallback(async () => {
     try {
       const response = await fetch('/api/napi-perces/import');
       if (response.ok) {
@@ -83,10 +103,10 @@ export default function NapiPercesPage() {
             unique_days: result.stats.unique_days,
           });
           
-          // If import time changed, refresh data
+          // If import time changed, refresh data (silent)
           if (lastImportTime && newImportTime !== lastImportTime) {
             console.log('Új adat érkezett, frissítés...');
-            fetchData(false);
+            fetchData(true);
           }
           setLastImportTime(newImportTime);
         }
@@ -94,14 +114,14 @@ export default function NapiPercesPage() {
     } catch (err) {
       console.error('Import status fetch error:', err);
     }
-  };
+  }, [lastImportTime, fetchData]);
 
-  // Check for updates every 30 sec (only status, not full data)
+  // Check for updates - gyorsabb intervallum az import státuszhoz
   useEffect(() => {
     checkForUpdates();
-    const interval = setInterval(checkForUpdates, 30000);
+    const interval = setInterval(checkForUpdates, REFRESH_CONFIG.FAST_INTERVAL);
     return () => clearInterval(interval);
-  }, [lastImportTime]);
+  }, [checkForUpdates]);
 
   // Pagination handlers
   const handlePrevious = () => {

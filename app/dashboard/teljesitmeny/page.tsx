@@ -412,7 +412,11 @@ export default function TeljesitmenyPage() {
 
                 {/* Kategória Pie Chart - leadott percek bontása */}
                 {!loading && !error && chartData.length > 0 && (
-                  <KategoriaPieChart viewType={activeKimutat} />
+                  <KategoriaPieChart 
+                    viewType={activeKimutat} 
+                    selectedMuszak={selectedMuszak}
+                    availableDates={chartData.filter(d => d.datum).map(d => d.datum!)}
+                  />
                 )}
               </div>
 

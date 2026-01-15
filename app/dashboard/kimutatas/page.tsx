@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/dashboard';
 import AinovaLoader from '@/components/ui/AinovaLoader';
+import { REFRESH_CONFIG } from '@/hooks';
 
 interface DailySummary {
   datum: string;
@@ -33,13 +34,9 @@ export default function KimutatosPage() {
   const [dailyData, setDailyData] = useState<DailySummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, [period]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (!silent) setError(null);
     
     try {
       const response = await fetch(`/api/kimutatas?period=${period}`);
@@ -47,15 +44,37 @@ export default function KimutatosPage() {
       
       if (result.success) {
         setDailyData(result.data || []);
-      } else {
+      } else if (!silent) {
         setError(result.error || 'Hiba történt az adatok lekérésekor');
       }
     } catch (err) {
-      setError('Hálózati hiba');
+      if (!silent) setError('Hálózati hiba');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [period]);
+
+  // Kezdeti betöltés és period változás
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Automatikus háttér frissítés + focus/visibility
+  useEffect(() => {
+    const interval = setInterval(() => fetchData(true), REFRESH_CONFIG.DEFAULT_INTERVAL);
+    
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', () => fetchData(true));
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', () => fetchData(true));
+    };
+  }, [fetchData]);
 
   // Összesített statisztikák
   const stats = {

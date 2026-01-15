@@ -1,10 +1,8 @@
 'use client';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/dashboard';
-import React, { useState, useEffect, useRef } from 'react';
-
-// Automatikus frissítési intervallum (2 perc)
-const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000;
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { REFRESH_CONFIG } from '@/hooks';
 
 interface NapiAdat {
   igeny: number;
@@ -94,7 +92,7 @@ export default function AllokacioPagе() {
   };
 
   // Silent refresh - háttérben, loading nélkül
-  const silentRefresh = async () => {
+  const silentRefresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/allokacio/napi-terv?het=${hetSzam}&ev=${ev}`);
       const data = await res.json();
@@ -110,24 +108,31 @@ export default function AllokacioPagе() {
     } catch {
       // Silent - nem mutatunk hibát
     }
-  };
+  }, [hetSzam, ev]);
   
+  // Kezdeti betöltés
   useEffect(() => {
     loadAllData();
+  }, [hetSzam, ev]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Automatikus háttér frissítés
-    const interval = setInterval(silentRefresh, AUTO_REFRESH_INTERVAL);
+  // Automatikus háttér frissítés + visibility/focus
+  useEffect(() => {
+    const interval = setInterval(silentRefresh, REFRESH_CONFIG.DEFAULT_INTERVAL);
     
-    // Tab fókusz esetén frissítés
     const handleFocus = () => silentRefresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') silentRefresh();
+    };
+    
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hetSzam, ev]);
+  }, [silentRefresh]);
   
   // Dátum formázása - 01.12 (H)
   const formatDatum = (dateStr: string) => {

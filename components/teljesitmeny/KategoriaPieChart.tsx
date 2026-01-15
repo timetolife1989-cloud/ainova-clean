@@ -1,9 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-
-// Automatikus frissítési intervallum (2 perc)
-const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000;
+import React, { useMemo, useState } from 'react';
+import { useAutoRefresh, REFRESH_CONFIG } from '@/hooks';
 
 interface KategoriaAdat {
   kod: string;
@@ -26,8 +24,10 @@ interface KategoriaPercData {
 }
 
 interface KategoriaPieChartProps {
-  selectedDatum?: string;
   viewType: 'napi' | 'heti' | 'havi';
+  selectedMuszak?: 'A' | 'B' | 'C' | 'SUM';
+  /** Elérhető dátumok a fő chartból (YYYY-MM-DD formátum) */
+  availableDates?: string[];
 }
 
 // Modern színpaletta - harmonikus, elegáns
@@ -77,56 +77,46 @@ function createPolarSlice(
   `;
 }
 
-export default function KategoriaPieChart({ viewType }: KategoriaPieChartProps) {
-  const [data, setData] = useState<KategoriaPercData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function KategoriaPieChart({ viewType, selectedMuszak = 'SUM', availableDates = [] }: KategoriaPieChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const mountedRef = useRef(true);
+  // Kiválasztott dátum index - alapból az utolsó (legfrissebb)
+  const [selectedDateIndex, setSelectedDateIndex] = useState<number>(-1);
+  
+  // Aktuális kiválasztott dátum
+  const selectedDatum = availableDates.length > 0 
+    ? (selectedDateIndex >= 0 ? availableDates[selectedDateIndex] : availableDates[availableDates.length - 1])
+    : undefined;
 
-  // Fetch függvény
-  const fetchData = async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
+  // Központi hook használata - egységes frissítés
+  // viewType, muszak és datum változásnál újra fetch-elünk
+  const fetcher = React.useCallback(async () => {
+    const muszakParam = selectedMuszak || 'SUM';
+    let url = `/api/teljesitmeny/kategoria-perc?type=${viewType}&muszak=${muszakParam}`;
+    if (selectedDatum && viewType === 'napi') {
+      url += `&datum=${selectedDatum}`;
     }
-    
-    try {
-      const response = await fetch(`/api/teljesitmeny/kategoria-perc?type=${viewType}`);
-      const result = await response.json();
-      
-      if (mountedRef.current && result.success) {
-        setData(result);
-        if (!silent) setError(null);
-      } else if (!silent && !result.success) {
-        setError(result.error || 'Hiba történt');
-      }
-    } catch (err) {
-      if (!silent) {
-        console.error('Kategória perc fetch error:', err);
-        setError('Hálózati hiba');
-      }
-    } finally {
-      if (mountedRef.current && !silent) {
-        setLoading(false);
-      }
-    }
-  };
+    const response = await fetch(url);
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error || 'Hiba történt');
+    return result;
+  }, [viewType, selectedMuszak, selectedDatum]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    fetchData();
+  const { data, loading, error, refetch } = useAutoRefresh<KategoriaPercData>({
+    fetcher,
+    interval: REFRESH_CONFIG.DEFAULT_INTERVAL,
+    refetchOnFocus: true,
+    refetchOnVisibilityChange: true,
+  });
 
-    const interval = setInterval(() => fetchData(true), AUTO_REFRESH_INTERVAL);
-    const handleFocus = () => fetchData(true);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      mountedRef.current = false;
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [viewType]); // eslint-disable-line react-hooks/exhaustive-deps
+  // viewType, muszak vagy datum változáskor azonnal újra fetch-elünk
+  React.useEffect(() => {
+    refetch();
+  }, [viewType, selectedMuszak, selectedDatum]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Ha availableDates változik, reset a selectedDateIndex-et
+  React.useEffect(() => {
+    setSelectedDateIndex(-1); // -1 = utolsó (legfrissebb)
+  }, [availableDates.length]);
 
   // Adatok rendezése és színezése + szelet számítás
   const slices = useMemo(() => {
@@ -210,14 +200,21 @@ export default function KategoriaPieChart({ viewType }: KategoriaPieChartProps) 
   return (
     <div className="mt-6 border-t border-slate-700/50 pt-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-          <span className="text-xl">📊</span>
-          Leadott percek kategóriánként
-          <span className="text-slate-400 text-sm font-normal ml-1">
-            ({viewType === 'napi' ? 'napi' : viewType === 'heti' ? 'heti' : 'havi'} bontás)
-          </span>
-        </h3>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <span className="text-xl">📊</span>
+            Leadott percek kategóriánként
+            <span className="text-slate-400 text-sm font-normal ml-1">
+              ({viewType === 'napi' ? 'napi' : viewType === 'heti' ? 'heti' : 'havi'} bontás)
+            </span>
+            {selectedMuszak !== 'SUM' && (
+              <span className="text-xs text-cyan-400 font-normal ml-2">
+                {selectedMuszak} műszak
+              </span>
+            )}
+          </h3>
+        </div>
         <div className="text-right">
           <p className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
             {data?.osszPerc?.toLocaleString() || 0}
@@ -225,6 +222,35 @@ export default function KategoriaPieChart({ viewType }: KategoriaPieChartProps) 
           <p className="text-xs text-slate-400 tracking-wide">összes perc</p>
         </div>
       </div>
+      
+      {/* Dátum választó - csak napi nézetben és ha van több dátum */}
+      {viewType === 'napi' && availableDates.length > 1 && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-400 mr-1">Nap:</span>
+          {availableDates.map((dateStr, idx) => {
+            const date = new Date(dateStr);
+            const dayName = date.toLocaleDateString('hu-HU', { weekday: 'short' });
+            const dayNum = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const isSelected = selectedDateIndex === idx || (selectedDateIndex === -1 && idx === availableDates.length - 1);
+            
+            return (
+              <button
+                key={dateStr}
+                onClick={() => setSelectedDateIndex(idx)}
+                className={`px-2 py-1 text-xs rounded-md transition-all ${
+                  isSelected
+                    ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-500/50'
+                    : 'bg-slate-700/50 text-slate-400 border border-slate-600/50 hover:bg-slate-700 hover:text-slate-300'
+                }`}
+                title={dateStr}
+              >
+                {month}.{dayNum} {dayName}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
         {/* Coxcomb / Polar Area Chart */}
